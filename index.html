@@ -255,6 +255,7 @@ nav::-webkit-scrollbar{display:none}
   <div class="ntab" data-p="regulatory">📋 Regulatory</div>
   <div class="ntab" data-p="intel">🧠 Intelligence</div>
   <div class="ntab" data-p="ccgt">⚡ Saltend CCGT</div>
+  <div class="ntab" data-p="grid">🔌 Grid Intelligence</div>
 </nav>
 
 <div class="ws">
@@ -304,6 +305,10 @@ nav::-webkit-scrollbar{display:none}
       <div id="river-data" style="padding:.55rem .9rem;font-size:.68rem;color:var(--mid)"><span class="sp"></span>Loading…</div>
       <div class="rp-ti" style="margin-top:.25rem">Saltend CCGT (Triton Power)</div>
       <div id="saltend-mini" style="padding:.55rem .9rem;font-size:.68rem;color:var(--mid)"><span class="sp"></span>Loading…</div>
+      <div class="rp-ti" style="margin-top:.25rem">UK Grid Fuel Mix (Elexon)</div>
+      <div id="fuel-mini" style="padding:.55rem .9rem;font-size:.68rem;color:var(--mid)"><span class="sp"></span>Loading…</div>
+      <div class="rp-ti" style="margin-top:.25rem">Temperature (Elexon)</div>
+      <div id="temp-mini" style="padding:.55rem .9rem;font-size:.68rem;color:var(--mid)"><span class="sp"></span>Loading…</div>
     </div>
   </div>
 
@@ -548,6 +553,43 @@ nav::-webkit-scrollbar{display:none}
         <strong>B1610 (history):</strong> actual reconciled metered output, available from 2015 to ~5 days ago.<br>
         <strong>REMIT:</strong> mandatory outage notices for planned &amp; unplanned trips.
       </div>
+    </div>
+  </div>
+
+  <!-- ═══ GRID INTELLIGENCE ═══ -->
+  <div class="page" id="pg-grid">
+    <div class="fp" style="flex:1">
+
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;flex-wrap:wrap;gap:.5rem">
+        <div>
+          <div class="page-ti">Grid Intelligence</div>
+          <div class="page-sub">Elexon BMRS — fuel mix · temperature · regional power plant outages · all free, no key</div>
+        </div>
+        <button class="ai-btn" style="width:auto;padding:.35rem .9rem" onclick="loadGrid()">↻ Refresh All</button>
+      </div>
+
+      <!-- FUEL MIX -->
+      <div class="sec-hd">UK Grid Fuel Mix — Live (FUELHH)</div>
+      <div id="fuel-mix-main">
+        <div class="loading-ph"><span class="sp"></span>Loading fuel mix from Elexon…</div>
+      </div>
+
+      <!-- TEMPERATURE -->
+      <div class="sec-hd" style="margin-top:.75rem">UK Temperature vs Seasonal Normal (Elexon TEMP)</div>
+      <div id="temp-main">
+        <div class="loading-ph"><span class="sp"></span>Loading temperature data…</div>
+      </div>
+
+      <!-- REMIT -->
+      <div class="sec-hd" style="margin-top:.75rem">Regional Power Plant Outages — Humber &amp; Teesside (REMIT)</div>
+      <div style="font-size:.72rem;color:var(--mid);margin-bottom:.65rem;line-height:1.5">
+        Monitoring CCGTs that supply power and process steam to UK chemical clusters.
+        Outages here directly affect steam supply, power costs and production at adjacent sites.
+      </div>
+      <div id="remit-main">
+        <div class="loading-ph"><span class="sp"></span>Loading REMIT outage notices…</div>
+      </div>
+
     </div>
   </div>
 
@@ -1417,6 +1459,200 @@ function renderHistChart(data) {
     </svg>`;
 }
 
+// ═══════════ GRID INTELLIGENCE (FUELHH + TEMP + REMIT) ═══════════
+
+const FUEL_COLORS={gas:'#ef4444',wind:'#3b82f6',nuclear:'#8b5cf6',solar:'#f59e0b',coal:'#6b7280',imports:'#06b6d4',other:'#94a3b8'};
+
+async function loadGrid(){
+  const fuelEl=document.getElementById('fuel-mix-main');
+  const tempEl=document.getElementById('temp-main');
+  const remitEl=document.getElementById('remit-main');
+  if(fuelEl)fuelEl.innerHTML='<div class="loading-ph"><span class="sp"></span>Fetching fuel mix from Elexon…</div>';
+  if(tempEl)tempEl.innerHTML='<div class="loading-ph"><span class="sp"></span>Fetching temperature data…</div>';
+  if(remitEl)remitEl.innerHTML='<div class="loading-ph"><span class="sp"></span>Fetching REMIT notices…</div>';
+  try{
+    const controller=new AbortController();
+    const tid=setTimeout(()=>controller.abort(),15000);
+    const r=await fetch('/api/grid',{signal:controller.signal});
+    clearTimeout(tid);
+    if(!r.ok)throw new Error('Grid API '+r.status);
+    const d=await r.json();
+    renderFuelMix(d,fuelEl,document.getElementById('fuel-mini'));
+    renderTemp(d,tempEl,document.getElementById('temp-mini'));
+    renderREMIT(d,remitEl);
+  }catch(e){
+    const err=`<div style="color:var(--red);font-size:.75rem;padding:.5rem">Error: ${e.message}</div>`;
+    if(fuelEl)fuelEl.innerHTML=err;
+    if(tempEl)tempEl.innerHTML=err;
+    if(remitEl)remitEl.innerHTML=err;
+    const miniErr='<span style="font-size:.65rem;color:var(--red);padding:.4rem .9rem;display:block">Unavailable</span>';
+    const fm=document.getElementById('fuel-mini');const tm=document.getElementById('temp-mini');
+    if(fm)fm.innerHTML=miniErr;if(tm)tm.innerHTML=miniErr;
+  }
+}
+
+function renderFuelMix(d,el,miniEl){
+  if(!d.fuel_mix){
+    const msg=`<div style="font-size:.72rem;color:var(--amber);padding:.5rem">${d.fuel_error||'Fuel mix data unavailable'}</div>`;
+    if(el)el.innerHTML=msg;if(miniEl)miniEl.innerHTML=msg;return;
+  }
+  const fm=d.fuel_mix;
+  const pressureColor={high:'var(--red)',medium:'var(--amber)',low:'var(--green)'}[fm.cost_pressure]||'var(--mid)';
+  const pressureLabel={high:'HIGH — gas-heavy grid, elevated power costs for electro-intensive processes',medium:'MODERATE — balanced generation mix',low:'LOW — wind-heavy, lower power costs'}[fm.cost_pressure]||'';
+  if(el){
+    const bars=[
+      {label:'Gas (CCGT)',pct:fm.gas_pct,mw:fm.gas_mw,col:FUEL_COLORS.gas},
+      {label:'Wind',pct:fm.wind_pct,mw:fm.wind_mw,col:FUEL_COLORS.wind},
+      {label:'Nuclear',pct:fm.nuclear_pct,mw:fm.nuclear_mw,col:FUEL_COLORS.nuclear},
+      {label:'Solar',pct:fm.solar_pct,mw:fm.solar_mw,col:FUEL_COLORS.solar},
+      {label:'Coal/Oil',pct:fm.coal_pct,mw:fm.coal_mw,col:FUEL_COLORS.coal},
+    ].filter(b=>b.mw>0);
+    const stackSegs=bars.map(b=>`<div style="flex:${b.pct};background:${b.col};height:100%;min-width:2px" title="${b.label}: ${b.pct}%"></div>`).join('');
+    const hist=fm.history||[];
+    const sparkPts=hist.map((h,i)=>{
+      const x=8+(i/Math.max(hist.length-1,1))*584;
+      const y=8+(1-h.gas_pct/100)*44;
+      return`${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(' ');
+    el.innerHTML=`<div class="card" style="margin-bottom:.65rem">
+      <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;margin-bottom:.75rem">
+        <div><div style="font-size:.58rem;text-transform:uppercase;letter-spacing:.08em;color:var(--mid);margin-bottom:.2rem">Total Generation</div>
+          <div style="font-family:var(--mono);font-size:1rem;font-weight:500;color:var(--navy)">${fm.total_mw.toLocaleString()} <span style="font-size:.72rem;color:var(--mid)">MW</span></div></div>
+        <div><div style="font-size:.58rem;text-transform:uppercase;letter-spacing:.08em;color:var(--mid);margin-bottom:.2rem">Gas</div>
+          <div style="font-family:var(--mono);font-size:1rem;font-weight:500;color:${FUEL_COLORS.gas}">${fm.gas_pct}% · ${fm.gas_mw.toLocaleString()} MW</div></div>
+        <div><div style="font-size:.58rem;text-transform:uppercase;letter-spacing:.08em;color:var(--mid);margin-bottom:.2rem">Wind</div>
+          <div style="font-family:var(--mono);font-size:1rem;font-weight:500;color:${FUEL_COLORS.wind}">${fm.wind_pct}% · ${fm.wind_mw.toLocaleString()} MW</div></div>
+        <div style="margin-left:auto;text-align:right"><div style="font-size:.58rem;text-transform:uppercase;letter-spacing:.08em;color:var(--mid);margin-bottom:.2rem">Cost Pressure</div>
+          <div style="font-size:.8rem;font-weight:700;color:${pressureColor}">${fm.cost_pressure==='high'?'⬆':fm.cost_pressure==='low'?'⬇':'→'} ${fm.cost_pressure.toUpperCase()}</div></div>
+      </div>
+      <div style="height:20px;border-radius:4px;overflow:hidden;display:flex;margin-bottom:.5rem">${stackSegs}</div>
+      <div style="display:flex;gap:.65rem;flex-wrap:wrap;margin-bottom:.65rem">
+        ${bars.map(b=>`<span style="display:flex;align-items:center;gap:4px;font-size:.65rem;color:var(--mid)">
+          <span style="width:8px;height:8px;border-radius:2px;background:${b.col};display:inline-block"></span>${b.label}: <strong style="color:var(--navy)">${b.pct}%</strong></span>`).join('')}
+      </div>
+      ${hist.length>2?`<div style="font-size:.6rem;color:var(--mid);margin-bottom:.25rem">Gas % — last 24hrs</div>
+      <svg viewBox="0 0 600 60" width="100%" style="height:48px">
+        <line x1="8" y1="8" x2="8" y2="52" stroke="var(--b1)" stroke-width="0.5"/>
+        <line x1="8" y1="52" x2="592" y2="52" stroke="var(--b1)" stroke-width="0.5"/>
+        <text x="4" y="11" text-anchor="end" style="font-size:8px;fill:var(--mid)">100%</text>
+        <text x="4" y="53" text-anchor="end" style="font-size:8px;fill:var(--mid)">0%</text>
+        <polyline points="${sparkPts}" fill="none" stroke="${FUEL_COLORS.gas}" stroke-width="1.2" stroke-linejoin="round"/>
+      </svg>`:''}
+      <div style="margin-top:.5rem;font-size:.7rem;color:${pressureColor};background:rgba(0,0,0,.03);padding:.45rem .6rem;border-radius:5px;border-left:2px solid ${pressureColor}">
+        <strong>Chemical cost signal:</strong> ${pressureLabel}${fm.gas_pct>45?' — chlor-alkali, ammonia and electrolysis processes face elevated power costs.':fm.wind_pct>35?' — good window for energy-intensive batch operations.':'.'}
+      </div>
+      <div style="font-size:.6rem;color:var(--dim);margin-top:.35rem">Settlement period ${fm.settlement_period} · ${fm.settlement_date} · Elexon FUELHH</div>
+    </div>`;
+  }
+  if(miniEl){
+    const segs=[{pct:fm.gas_pct,col:FUEL_COLORS.gas},{pct:fm.wind_pct,col:FUEL_COLORS.wind},{pct:fm.nuclear_pct,col:FUEL_COLORS.nuclear},{pct:Math.max(0,100-fm.gas_pct-fm.wind_pct-fm.nuclear_pct),col:FUEL_COLORS.other}].filter(s=>s.pct>0);
+    miniEl.innerHTML=`<div style="padding:.4rem .9rem .55rem">
+      <div style="height:8px;border-radius:4px;overflow:hidden;display:flex;margin-bottom:.3rem">${segs.map(s=>`<div style="flex:${s.pct};background:${s.col};height:100%"></div>`).join('')}</div>
+      <div style="display:flex;justify-content:space-between;font-size:.62rem">
+        <span style="color:${FUEL_COLORS.gas}">Gas ${fm.gas_pct}%</span><span style="color:${FUEL_COLORS.wind}">Wind ${fm.wind_pct}%</span><span style="color:${FUEL_COLORS.nuclear}">Nuc ${fm.nuclear_pct}%</span>
+      </div>
+      <div style="font-size:.6rem;color:${pressureColor};margin-top:.2rem;font-weight:700">Cost pressure: ${fm.cost_pressure.toUpperCase()}</div>
+    </div>`;
+  }
+}
+
+function renderTemp(d,el,miniEl){
+  if(!d.temperature){
+    const msg=`<div style="font-size:.72rem;color:var(--amber);padding:.5rem">${d.temp_error||'Temperature data unavailable'}</div>`;
+    if(el)el.innerHTML=msg;if(miniEl)miniEl.innerHTML='<span style="font-size:.65rem;color:var(--dim);padding:.4rem .9rem;display:block">Temp unavailable</span>';return;
+  }
+  const t=d.temperature;
+  const devCol=t.deviation_c===null?'var(--mid)':t.deviation_c<-2?'#3b82f6':t.deviation_c>2?'var(--red)':'var(--green)';
+  const devLabel=t.deviation_c===null?'':(t.deviation_c>0?`+${t.deviation_c}°C above normal`:`${t.deviation_c}°C below normal`);
+  if(el){
+    const hist=(t.history||[]).filter(h=>h.actual!==null);
+    const maxT=Math.max(...hist.map(h=>Math.max(h.actual||0,h.normal||0)),20);
+    const minT=Math.min(...hist.map(h=>Math.min(h.actual||0,h.normal||0)),0);
+    const range=maxT-minT||1;
+    const bW=hist.length>0?Math.floor(560/hist.length):80;
+    const barsHTML=hist.map((h,i)=>{
+      const x=30+i*bW;
+      const aY=60-((h.actual-minT)/range*60);
+      const nY=60-((h.normal-minT)/range*60);
+      const lbl=h.date?new Date(h.date+'T12:00:00Z').toLocaleDateString('en-GB',{day:'numeric',month:'short'}):'';
+      return`<rect x="${x}" y="${aY+8}" width="${bW-4}" height="${60-aY}" rx="2" fill="${h.actual>(h.normal||0)?'rgba(239,68,68,.25)':'rgba(59,130,246,.25)'}"/>
+        <line x1="${x+(bW-4)/2}" y1="${nY+8}" x2="${x+(bW-4)/2+8}" y2="${nY+8}" stroke="var(--mid)" stroke-width="1.5" stroke-dasharray="2 2"/>
+        <text x="${x+(bW-4)/2}" y="82" text-anchor="middle" style="font-size:8px;fill:var(--mid)">${lbl}</text>
+        <text x="${x+(bW-4)/2}" y="${aY+5}" text-anchor="middle" style="font-size:8px;fill:var(--navy)">${h.actual!==null?h.actual.toFixed(1):''}°</text>`;
+    }).join('');
+    el.innerHTML=`<div class="card">
+      <div style="display:flex;align-items:center;gap:1.25rem;flex-wrap:wrap;margin-bottom:.75rem">
+        <div><div style="font-size:.58rem;text-transform:uppercase;letter-spacing:.08em;color:var(--mid);margin-bottom:.2rem">Today (${t.date})</div>
+          <div style="font-family:var(--mono);font-size:1.3rem;font-weight:500;color:var(--navy)">${t.actual_c!==null?t.actual_c+'°C':'--'}</div></div>
+        <div><div style="font-size:.58rem;text-transform:uppercase;letter-spacing:.08em;color:var(--mid);margin-bottom:.2rem">Seasonal Normal</div>
+          <div style="font-family:var(--mono);font-size:1rem;color:var(--mid)">${t.normal_c!==null?t.normal_c+'°C':'--'}</div></div>
+        <div><div style="font-size:.58rem;text-transform:uppercase;letter-spacing:.08em;color:var(--mid);margin-bottom:.2rem">Deviation</div>
+          <div style="font-family:var(--mono);font-size:1rem;font-weight:600;color:${devCol}">${devLabel||'Normal'}</div></div>
+      </div>
+      ${hist.length>1?`<svg viewBox="0 0 600 90" width="100%" style="height:80px;overflow:visible">
+        <line x1="28" y1="8" x2="28" y2="68" stroke="var(--b1)" stroke-width="0.5"/>
+        <text x="24" y="11" text-anchor="end" style="font-size:8px;fill:var(--mid)">${maxT.toFixed(0)}°C</text>
+        <text x="24" y="68" text-anchor="end" style="font-size:8px;fill:var(--mid)">${minT.toFixed(0)}°C</text>
+        ${barsHTML}</svg>`:''}
+      <div style="margin-top:.5rem;font-size:.72rem;color:var(--mid);padding:.45rem .6rem;border-radius:5px;border-left:2px solid ${devCol};background:rgba(0,0,0,.03);line-height:1.55">
+        <strong style="color:var(--navy)">Chemical site impact:</strong> ${t.chemical_impact}
+      </div>
+      <div style="font-size:.6rem;color:var(--dim);margin-top:.35rem">${t.date} · Elexon TEMP dataset</div>
+    </div>`;
+  }
+  if(miniEl){
+    miniEl.innerHTML=`<div style="padding:.4rem .9rem .55rem">
+      <div style="display:flex;justify-content:space-between;font-size:.68rem">
+        <span style="font-family:var(--mono);font-weight:500;color:var(--navy)">${t.actual_c!==null?t.actual_c+'°C':'--'}</span>
+        <span style="color:${devCol};font-size:.62rem">${devLabel}</span>
+      </div>
+      <div style="font-size:.6rem;color:var(--mid);margin-top:.15rem;line-height:1.4">${t.chemical_impact.slice(0,65)}…</div>
+    </div>`;
+  }
+}
+
+function renderREMIT(d,el){
+  if(!el)return;
+  if(!d.remit){el.innerHTML=`<div style="font-size:.72rem;color:var(--amber);padding:.5rem">${d.remit_error||'REMIT data unavailable'}</div>`;return;}
+  const rm=d.remit;
+  if(rm.total_found===0){
+    el.innerHTML=`<div class="card"><div style="font-size:.75rem;color:var(--green);padding:.25rem 0">✓ No active or upcoming outage notices for monitored plants in the next 14 days.</div>
+      <div style="font-size:.65rem;color:var(--dim);margin-top:.3rem">Monitoring: Saltend, Killingholme, Keadby, South Humber Bank, Teesside · <a href="https://bmrs.elexon.co.uk/remit" target="_blank" style="color:var(--teal)">View all REMIT →</a></div></div>`;
+    return;
+  }
+  const active=rm.notices.filter(n=>n.active);
+  const upcoming=rm.notices.filter(n=>!n.active);
+  const renderN=n=>{
+    const col=n.active?'var(--red)':'var(--amber)';
+    const badge=n.active?`<span style="font-size:.58rem;font-weight:800;padding:.1rem .4rem;border-radius:3px;background:rgba(220,38,38,.1);color:var(--red)">ACTIVE</span>`:
+      `<span style="font-size:.58rem;font-weight:800;padding:.1rem .4rem;border-radius:3px;background:rgba(245,158,11,.1);color:var(--amber)">UPCOMING</span>`;
+    const mw=n.unavailable_mw?`<span style="font-family:var(--mono);font-size:.7rem;color:var(--navy);margin-left:auto">${n.unavailable_mw} MW</span>`:'';
+    const start=n.start?new Date(n.start).toLocaleDateString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'';
+    const end=n.end?new Date(n.end).toLocaleDateString('en-GB',{day:'numeric',month:'short'}):'TBC';
+    return`<div style="padding:.6rem 0;border-bottom:1px solid var(--b1)">
+      <div style="display:flex;align-items:center;gap:.4rem;flex-wrap:wrap;margin-bottom:.2rem">${badge}
+        <span style="font-size:.68rem;font-weight:600;color:var(--navy)">${n.plant_name}</span>
+        <span style="font-size:.62rem;color:var(--teal)">${n.chemical_site}</span>${mw}</div>
+      <div style="display:flex;gap:.4rem;font-size:.65rem;color:var(--mid)">
+        <span style="font-family:var(--mono);font-size:.6rem">${n.bmu}</span>
+        ${n.type?`<span>· ${n.type}</span>`:''}
+        ${n.reason?`<span>· ${n.reason.slice(0,80)}</span>`:''}
+      </div>
+      ${start?`<div style="font-size:.62rem;color:var(--dim);margin-top:.12rem">${start} → ${end}</div>`:''}
+    </div>`;
+  };
+  el.innerHTML=`
+    ${active.length>0?`<div class="card" style="border-left:3px solid var(--red);margin-bottom:.6rem">
+      <div class="card-ti" style="color:var(--red)">⚠ Active Outages (${active.length})</div>
+      ${active.map(renderN).join('')}</div>`:''}
+    ${upcoming.length>0?`<div class="card" style="border-left:3px solid var(--amber);margin-bottom:.6rem">
+      <div class="card-ti" style="color:var(--amber)">📅 Upcoming Planned Outages (${upcoming.length})</div>
+      ${upcoming.map(renderN).join('')}</div>`:''}
+    <div style="font-size:.62rem;color:var(--dim);padding:.3rem 0">
+      Monitoring Humber &amp; Teesside area CCGTs · <a href="https://bmrs.elexon.co.uk/remit" target="_blank" style="color:var(--teal)">Full REMIT register →</a>
+    </div>`;
+}
+
 // ═══════════ INIT ═══════════
 
 window.addEventListener('load',()=>{
@@ -1424,11 +1660,13 @@ window.addEventListener('load',()=>{
   loadEnergy();
   loadRivers();
   loadNews();
-  initHistDates(); // set default date range for CCGT history
+  loadGrid();
+  initHistDates();
 });
 document.querySelector('[data-p="planning"]').addEventListener('click',()=>{if(!allPlan.length)loadPlanning();});
 document.querySelector('[data-p="regulatory"]').addEventListener('click',()=>{if(!document.querySelector('#reg-list .reg-item'))loadReg();});
 document.querySelector('[data-p="ccgt"]').addEventListener('click',()=>{loadCCGT();initHistDates();});
+document.querySelector('[data-p="grid"]').addEventListener('click',()=>{loadGrid();});
 </script>
 </body>
 </html>
