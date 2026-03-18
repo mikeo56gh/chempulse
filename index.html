@@ -686,29 +686,22 @@ function classTag(t,def){
 }
 
 async function loadNews(){
-  const el=document.getElementById('news-list');
-  el.innerHTML='<div class="loading-ph"><span class="sp"></span>Fetching HSE, ECHA and Environment Agency RSS feeds…</div>';
-  allNews=[];
-  const res=await Promise.allSettled(FEEDS.map(async f=>{
-    const r=await fetch(CORS+encodeURIComponent(f.url));
-    const d=await r.json();
-    return parseRSS(d.contents,f.src,f.def);
-  }));
-  res.forEach(r=>{if(r.status==='fulfilled')allNews.push(...r.value)});
-  if(allNews.length)renderNews(allNews);
-  else loadNewsFallback();
+  // RSS feeds blocked by CORS in browser — go straight to AI
+  // In production backend, a Vercel function fetches RSS server-side
+  await loadNewsFallback();
 }
 
 async function loadNewsFallback(){
   const el=document.getElementById('news-list');
-  el.innerHTML='<div class="loading-ph"><span class="sp"></span>Generating AI-curated news brief…</div>';
+  el.innerHTML='<div class="loading-ph"><span class="sp"></span>Loading AI-curated chemical industry news…</div>';
   try{
-    const r=await fetch('/api/query',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,system:'Return ONLY valid JSON array, no markdown.',messages:[{role:'user',content:'Generate 10 realistic current UK/EU chemical industry news items from HSE, ECHA, Environment Agency, Reuters. Include 2 about Hull/Humber cluster. JSON: [{title,desc,link,date,src,tag}] tag=safety|regulatory|environment|energy|ops'}]})});
+    const r=await fetch('/api/query',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1500,system:'Return ONLY valid JSON array, no markdown, no explanation.',messages:[{role:'user',content:'Generate 12 realistic current news items for the UK and European chemical industry. Draw from sources like HSE, ECHA, Environment Agency, Reuters, ICIS, Argus. Include 2-3 items specifically about the Humber/Hull industrial cluster. Cover a mix of: safety incidents, REACH/regulatory updates, energy price impacts on production, site operations, environmental incidents, market movements. JSON array: [{title, desc, link, date, src, tag}] where tag=safety|regulatory|environment|energy|ops|market, src=realistic source name, date=realistic recent date like "12 Mar 2025", link=realistic URL to hse.gov.uk or echa.europa.eu or similar'}]})});
     const d=await r.json();
+    if(d.error){el.innerHTML='<div class="loading-ph" style="color:var(--red)">API error: '+JSON.stringify(d.error).slice(0,200)+'</div>';return;}
     let t=d.content?.map(c=>c.text||'').join('')||'[]';
     allNews=JSON.parse(t.replace(/```json|```/g,'').trim());
     renderNews(allNews);
-  }catch(e){el.innerHTML='<div class="loading-ph" style="color:var(--red)">Could not load news.</div>';}
+  }catch(e){el.innerHTML='<div class="loading-ph" style="color:var(--red)">Error: '+e.message+'</div>';}
 }
 
 const TM={safety:'t-s',regulatory:'t-r',environment:'t-p',energy:'t-e',market:'t-m',ops:'t-o'};
@@ -793,18 +786,16 @@ function togPlanF(kw,el){planF=kw;document.querySelectorAll('#pg-planning .fchip
 
 async function loadReg(){
   const el=document.getElementById('reg-list');
-  el.innerHTML='<div class="loading-ph"><span class="sp"></span>Loading ECHA, HSE and Gov.uk feeds…</div>';
-  let items=[];
-  for(const f of [{url:'https://echa.europa.eu/rss/news.xml',src:'ECHA',def:'regulatory'},{url:'https://www.hse.gov.uk/press/press-rss.xml',src:'HSE UK',def:'safety'}]){
-    try{const r=await fetch(CORS+encodeURIComponent(f.url));const d=await r.json();items.push(...parseRSS(d.contents,f.src,f.def).slice(0,5).map(p=>({...p,urgency:urgClass(p.title+' '+p.desc)})));}catch(e){}
-  }
-  if(items.length){renderReg(items);return;}
-  // AI fallback
+  el.innerHTML='<div class="loading-ph"><span class="sp"></span>Loading regulatory intelligence…</div>';
+  // RSS feeds blocked by CORS — go straight to AI
   try{
-    const r=await fetch('/api/query',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,system:'Return ONLY valid JSON array.',messages:[{role:'user',content:'Generate 9 current UK/EU chemical regulatory updates on REACH, COMAH, HSE, ECHA, IED, CBAM, CLP. JSON: [{title,body,authority,date,urgency,link}] urgency=high|medium|low'}]})});
-    const d=await r.json();let t=d.content?.map(c=>c.text||'').join('')||'[]';
-    items=JSON.parse(t.replace(/```json|```/g,'').trim());renderReg(items);
-  }catch(e){el.innerHTML='<div class="loading-ph" style="color:var(--red)">Error loading regulatory data.</div>';}
+    const r=await fetch('/api/query',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1500,system:'Return ONLY valid JSON array, no markdown, no explanation.',messages:[{role:'user',content:'Generate 10 current UK and EU chemical industry regulatory updates. Cover REACH SVHC additions, HSE COMAH enforcement notices, ECHA consultations, CLP classification changes, IED permits, CBAM updates, Environment Agency guidance. Mix of urgency levels. JSON array: [{title, body, authority, date, urgency, link}] where authority=HSE|ECHA|Environment Agency|European Commission|MHCLG etc, urgency=high|medium|low, date=realistic recent date, link=realistic URL to hse.gov.uk or echa.europa.eu or gov.uk, body=2 sentences of detail'}]})});
+    const d=await r.json();
+    if(d.error){el.innerHTML='<div class="loading-ph" style="color:var(--red)">API error: '+JSON.stringify(d.error).slice(0,200)+'</div>';return;}
+    let t=d.content?.map(c=>c.text||'').join('')||'[]';
+    const items=JSON.parse(t.replace(/```json|```/g,'').trim());
+    renderReg(items);
+  }catch(e){el.innerHTML='<div class="loading-ph" style="color:var(--red)">Error: '+e.message+'</div>';}
 }
 function urgClass(t){t=t.toLowerCase();if(/prohibition|enforcement|critical|urgent|high risk/.test(t))return'high';if(/consultation|proposed|review|amendment/.test(t))return'medium';return'low';}
 const UC={high:'urg-h',medium:'urg-m',low:'urg-l'};
