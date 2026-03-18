@@ -1,6 +1,6 @@
 // api/ccgt.js
 // Triton Power Saltend CCGT — live status + historical generation
-// Elexon BMRS API — completely free, no API key required
+// Elexon BMRS Insights API — completely free, no API key required
 // BMU IDs: T_SCCL-1, T_SCCL-2, T_SCCL-3 (Saltend Cogeneration Company Ltd)
 
 const BASE = 'https://data.elexon.co.uk/bmrs/api/v1';
@@ -12,20 +12,16 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   const mode = req.query.mode || 'live';
-
-  if (mode === 'history') {
-    return handleHistory(req, res);
-  } else {
-    return handleLive(req, res);
-  }
+  if (mode === 'history') return handleHistory(req, res);
+  return handleLive(req, res);
 }
 
-// ── LIVE MODE: Physical Notifications + REMIT ─────────────────────────────────
+// ── LIVE MODE ─────────────────────────────────────────────────────────────────
 
 async function handleLive(req, res) {
   const now    = new Date();
   const from24 = new Date(now - 24 * 60 * 60 * 1000).toISOString();
-  const from7d = new Date(now - 7  * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const from7d = new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
   const today  = now.toISOString().split('T')[0];
 
   const result = {
@@ -40,9 +36,9 @@ async function handleLive(req, res) {
     data_source: 'Elexon BMRS — data.elexon.co.uk/bmrs/api/v1'
   };
 
-  // Physical Notifications — one call per unit
+  // Physical Notifications per unit
   for (const bmu of SALTEND_BMUS) {
-    const unit = { bmu, pn: [], current_mw: null, status: 'unknown', b1610: [] };
+    const unit = { bmu, pn: [], current_mw: null, status: 'unknown' };
     try {
       const r = await fetch(
         `${BASE}/balancing/physical?bmUnit=${encodeURIComponent(bmu)}&from=${from24}&to=${now.toISOString()}&dataset=PN`,
@@ -67,7 +63,7 @@ async function handleLive(req, res) {
     result.units.push(unit);
   }
 
-  // REMIT outage notices
+  // REMIT notices
   try {
     const r = await fetch(
       `${BASE}/datasets/REMIT?from=${from7d}&to=${today}&bmUnit=T_SCCL`,
@@ -84,9 +80,8 @@ async function handleLive(req, res) {
         endTime: i.eventEnd || i.effectiveTo
       }));
     }
-  } catch (e) { result.remit_error = e.message; }
+  } catch (e) {}
 
-  // Summary
   const running = result.units.filter(u => u.status === 'running').length;
   const partial = result.units.filter(u => u.status === 'partial' || u.status === 'low').length;
   const offline = result.units.filter(u => u.status === 'offline').length;
@@ -100,7 +95,7 @@ async function handleLive(req, res) {
     plant_status: unknown === 3 ? 'data_unavailable'
                 : offline === 3 ? 'offline'
                 : running === 3 ? 'full_output'
-                : running >= 1 || partial >= 1 ? 'partial_output' : 'offline',
+                : (running + partial) > 0 ? 'partial_output' : 'offline',
     active_remit: result.remit_outages.length,
     note: totalMW > 0
       ? `${totalMW} MW total across ${running + partial} active units`
@@ -111,102 +106,132 @@ async function handleLive(req, res) {
   res.status(200).json(result);
 }
 
-// ── HISTORY MODE: B1610 Actual Generation Output ──────────────────────────────
+// ── HISTORY MODE: B1610 stream endpoint (handles date ranges natively) ────────
 
 async function handleHistory(req, res) {
-  const fromDate = req.query.from; // YYYY-MM-DD
-  const toDate   = req.query.to;   // YYYY-MM-DD
+  const fromDate = req.query.from;
+  const toDate   = req.query.to;
 
   if (!fromDate || !toDate) {
-    return res.status(400).json({ error: 'from and to query params required (YYYY-MM-DD)' });
+    return res.status(400).json({ error: 'from and to params required (YYYY-MM-DD)' });
   }
 
-  const from = new Date(fromDate);
-  const to   = new Date(toDate);
-  const diffDays = Math.round((to - from) / 86400000);
-
-  if (diffDays < 0) return res.status(400).json({ error: 'from must be before to' });
+  const diffDays = Math.round((new Date(toDate) - new Date(fromDate)) / 86400000);
+  if (diffDays < 0)   return res.status(400).json({ error: 'from must be before to' });
   if (diffDays > 180) return res.status(400).json({ error: 'Maximum range is 180 days' });
+
+  // B1610/stream uses ISO datetime params and handles ranges natively
+  // This is the correct new endpoint per Elexon BSC Insight article
+  const fromISO = `${fromDate}T00:00:00Z`;
+  const toISO   = `${toDate}T23:59:59Z`;
 
   const result = {
     from: fromDate, to: toDate, diffDays,
     history: [],
+    bmu_ids_tried: SALTEND_BMUS,
     asOf: new Date().toISOString(),
-    data_source: 'Elexon BMRS B1610 — Actual Generation Output Per Generation Unit'
+    data_source: 'Elexon BMRS B1610/stream — Actual Generation Output Per Generation Unit'
   };
 
-  // B1610 — fetch per unit, iterate day by day for ranges > 1 day
-  // Elexon B1610 accepts a settlementDate param for single days
-  // For ranges we use publishDateTimeFrom/To or loop by date
-
   for (const bmu of SALTEND_BMUS) {
-    const unitData = { bmu, readings: [], avgMW: 0, peakMW: 0, loadFactor: 0, periodsRunning: 0 };
+    const unitData = { bmu, readings: [], avgMW: 0, peakMW: 0, loadFactor: 0, periodsRunning: 0, endpoint_tried: '' };
 
+    // Try 1: /datasets/B1610/stream — the correct range endpoint
+    let fetched = false;
     try {
-      // Try the date-range endpoint first
-      const r = await fetch(
-        `${BASE}/datasets/B1610?from=${fromDate}T00:00:00Z&to=${toDate}T23:59:59Z&bmUnit=${encodeURIComponent(bmu)}`,
-        { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(15000) }
-      );
+      const url = `${BASE}/datasets/B1610/stream?from=${fromISO}&to=${toISO}&bmUnit=${encodeURIComponent(bmu)}`;
+      unitData.endpoint_tried = url;
+      const r = await fetch(url, {
+        headers: { Accept: 'application/json' },
+        signal: AbortSignal.timeout(20000) // larger timeout for stream endpoint
+      });
 
       if (r.ok) {
-        const d = await r.json();
-        const items = d.data || d.items || [];
-
-        unitData.readings = items.map(i => ({
-          time: i.startTime || i.timeFrom || `${i.settlementDate}T${String(Math.floor((i.settlementPeriod - 1) * 0.5)).padStart(2,'0')}:${(i.settlementPeriod % 2 === 0 ? '30' : '00')}:00Z`,
-          period: i.settlementPeriod,
-          mw: Math.round(Math.max(0, i.quantity ?? i.output ?? i.levelFrom ?? 0))
-        })).sort((a, b) => a.time.localeCompare(b.time));
-
-      } else if (r.status === 400 || r.status === 404) {
-        // Fallback: loop settlement dates individually (slower but more compatible)
-        const readings = [];
-        let cursor = new Date(from);
-        while (cursor <= to && readings.length < 10000) {
-          const dateStr = cursor.toISOString().split('T')[0];
-          try {
-            const dr = await fetch(
-              `${BASE}/datasets/B1610?settlementDate=${dateStr}&bmUnit=${encodeURIComponent(bmu)}`,
-              { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(8000) }
-            );
-            if (dr.ok) {
-              const dd = await dr.json();
-              const items = dd.data || dd.items || [];
-              items.forEach(i => readings.push({
-                time: `${dateStr}T${String(Math.floor((i.settlementPeriod - 1) * 0.5)).padStart(2,'0')}:${i.settlementPeriod % 2 === 0 ? '30' : '00'}:00Z`,
-                period: i.settlementPeriod,
-                mw: Math.round(Math.max(0, i.quantity ?? i.output ?? 0))
-              }));
-            }
-          } catch (e) { /* skip day */ }
-          cursor.setDate(cursor.getDate() + 1);
+        const text = await r.text();
+        // Stream endpoint returns newline-delimited JSON or a JSON array
+        let items = [];
+        try {
+          items = JSON.parse(text); // try as array first
+          if (!Array.isArray(items)) items = items.data || items.items || [];
+        } catch {
+          // Try newline-delimited JSON
+          items = text.split('\n')
+            .filter(l => l.trim())
+            .map(l => { try { return JSON.parse(l); } catch { return null; } })
+            .filter(Boolean);
         }
-        unitData.readings = readings.sort((a, b) => a.time.localeCompare(b.time));
+        if (items.length > 0) {
+          unitData.readings = items.map(i => ({
+            time: i.startTime || i.timeFrom ||
+              (i.settlementDate && i.settlementPeriod
+                ? settlementToISO(i.settlementDate, i.settlementPeriod)
+                : null),
+            period: i.settlementPeriod,
+            mw: Math.round(Math.max(0, i.quantity ?? i.output ?? i.levelFrom ?? 0))
+          })).filter(r => r.time).sort((a, b) => a.time.localeCompare(b.time));
+          fetched = true;
+        }
       }
-    } catch (e) {
-      unitData.error = e.message;
+    } catch (e) { unitData.stream_error = e.message; }
+
+    // Try 2: /datasets/B1610 with settlementDate (day by day for short ranges)
+    if (!fetched && diffDays <= 14) {
+      const readings = [];
+      let cursor = new Date(fromDate);
+      const toD = new Date(toDate);
+      while (cursor <= toD) {
+        const dateStr = cursor.toISOString().split('T')[0];
+        try {
+          const r = await fetch(
+            `${BASE}/datasets/B1610?settlementDate=${dateStr}&bmUnit=${encodeURIComponent(bmu)}`,
+            { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(8000) }
+          );
+          if (r.ok) {
+            const d = await r.json();
+            (d.data || d.items || []).forEach(i => readings.push({
+              time: settlementToISO(i.settlementDate || dateStr, i.settlementPeriod || 1),
+              period: i.settlementPeriod,
+              mw: Math.round(Math.max(0, i.quantity ?? i.output ?? 0))
+            }));
+          }
+        } catch (e) {}
+        cursor.setDate(cursor.getDate() + 1);
+      }
+      if (readings.length > 0) {
+        unitData.readings = readings.sort((a, b) => a.time.localeCompare(b.time));
+        fetched = true;
+      }
     }
 
     // Stats
     const mwVals = unitData.readings.map(r => r.mw).filter(v => v > 0);
     if (mwVals.length > 0) {
-      unitData.avgMW        = Math.round(mwVals.reduce((a, b) => a + b, 0) / mwVals.length);
-      unitData.peakMW       = Math.max(...mwVals);
-      unitData.loadFactor   = Math.round((unitData.avgMW / 400) * 100); // ~400MW per unit
+      unitData.avgMW         = Math.round(mwVals.reduce((a, b) => a + b, 0) / mwVals.length);
+      unitData.peakMW        = Math.max(...mwVals);
+      unitData.loadFactor    = Math.round((unitData.avgMW / 400) * 100);
       unitData.periodsRunning = unitData.readings.filter(r => r.mw > 50).length;
     }
-
+    unitData.total_readings = unitData.readings.length;
     result.history.push(unitData);
   }
 
-  // Plant-level stats
+  // Plant totals
   const allMW = result.history.flatMap(u => u.readings.map(r => r.mw));
   if (allMW.length > 0) {
-    result.plant_avg_mw  = Math.round(allMW.reduce((a, b) => a + b, 0) / allMW.length);
-    result.plant_peak_mw = Math.max(...allMW);
+    result.plant_avg_mw      = Math.round(allMW.reduce((a, b) => a + b, 0) / allMW.length);
+    result.plant_peak_mw     = Math.max(...allMW);
     result.plant_load_factor = Math.round((result.plant_avg_mw / 1197) * 100);
+    result.total_readings    = allMW.length;
   }
 
   res.status(200).json(result);
+}
+
+// Convert Elexon settlementDate + settlementPeriod to ISO datetime
+// Settlement period 1 = 00:00-00:30, period 2 = 00:30-01:00, etc.
+function settlementToISO(settlementDate, period) {
+  const totalMins = (period - 1) * 30;
+  const hh = String(Math.floor(totalMins / 60)).padStart(2, '0');
+  const mm = String(totalMins % 60).padStart(2, '0');
+  return `${settlementDate}T${hh}:${mm}:00Z`;
 }
