@@ -164,17 +164,38 @@ export default async function handler(req, res) {
   }
 
   // ── REMIT — Regional outage notices ────────────────────────────────────────
+  // REMIT uses publishDateTimeFrom/To params (not from/to)
+  // Also try the opinionated /remit/list endpoint as fallback
   if (type === 'all' || type === 'remit') {
     try {
       const now = new Date();
-      const from14 = new Date(now - 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-      const to14   = new Date(now + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      const from14ISO = new Date(now - 14 * 24 * 60 * 60 * 1000).toISOString();
+      const to14ISO   = new Date(now + 14 * 24 * 60 * 60 * 1000).toISOString();
+      const from14    = from14ISO.split('T')[0];
+      const to14      = to14ISO.split('T')[0];
 
-      // Get all recent/upcoming REMIT notices (no BMU filter — then filter client-side)
-      const r = await fetch(
-        `${BASE}/datasets/REMIT?from=${from14}&to=${to14}`,
+      // Try the correct params — REMIT dataset uses publishDateTimeFrom/To
+      // Also try eventStartFrom/eventEndTo for event-based filtering
+      let r = await fetch(
+        `${BASE}/datasets/REMIT?publishDateTimeFrom=${from14ISO}&publishDateTimeTo=${to14ISO}`,
         { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(10000) }
-      );
+      ).catch(() => null);
+
+      // Fallback 1: try eventStart params
+      if (!r || !r.ok) {
+        r = await fetch(
+          `${BASE}/datasets/REMIT?from=${from14}&to=${to14}`,
+          { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(8000) }
+        ).catch(() => null);
+      }
+
+      // Fallback 2: opinionated REMIT list endpoint
+      if (!r || !r.ok) {
+        r = await fetch(
+          `${BASE}/remit/list/by-publish?publishDateTimeFrom=${from14ISO}&publishDateTimeTo=${to14ISO}`,
+          { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(8000) }
+        ).catch(() => null);
+      }
 
       const allBmuIds = new Set([
         ...HUMBER_BMUS.map(b => b.id),
@@ -184,9 +205,10 @@ export default async function handler(req, res) {
         m[b.id] = b; return m;
       }, {});
 
-      if (r.ok) {
+      if (r && r.ok) {
         const d = await r.json();
         const items = d.data || d.items || [];
+        results.remit_debug = { status: r.status, items_total: items.length, url: r.url };
 
         // Filter to our monitored BMUs
         const relevant = items.filter(i => {
@@ -228,7 +250,10 @@ export default async function handler(req, res) {
           clusters: { humber: HUMBER_BMUS.length, teesside: TEESSIDE_BMUS.length }
         };
       }
-    } catch (e) { results.remit_error = e.message; }
+    } catch (e) {
+      results.remit_error = e.message;
+      results.remit_debug = { error: e.message };
+    }
   }
 
   res.status(200).json(results);
