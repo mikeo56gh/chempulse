@@ -254,6 +254,7 @@ nav::-webkit-scrollbar{display:none}
   <div class="ntab" data-p="markets">📊 Market Inputs</div>
   <div class="ntab" data-p="regulatory">📋 Regulatory</div>
   <div class="ntab" data-p="intel">🧠 Intelligence</div>
+  <div class="ntab" data-p="ccgt">⚡ Saltend CCGT</div>
 </nav>
 
 <div class="ws">
@@ -301,6 +302,8 @@ nav::-webkit-scrollbar{display:none}
       </div>
       <div class="rp-ti">River Gauges (EA)</div>
       <div id="river-data" style="padding:.55rem .9rem;font-size:.68rem;color:var(--mid)"><span class="sp"></span>Loading…</div>
+      <div class="rp-ti" style="margin-top:.25rem">Saltend CCGT (Triton Power)</div>
+      <div id="saltend-mini" style="padding:.55rem .9rem;font-size:.68rem;color:var(--mid)"><span class="sp"></span>Loading…</div>
     </div>
   </div>
 
@@ -431,6 +434,58 @@ nav::-webkit-scrollbar{display:none}
         <button class="ai-btn" style="width:auto;padding:.35rem .9rem" onclick="loadReg()">↻ Load Live Updates</button>
       </div>
       <div id="reg-list"><div class="loading-ph">Click "Load Live Updates" to fetch from ECHA, HSE and Environment Agency feeds</div></div>
+    </div>
+  </div>
+
+  <!-- ═══ CCGT ═══ -->
+  <div class="page" id="pg-ccgt">
+    <div class="fp" style="flex:1">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem;flex-wrap:wrap;gap:.5rem">
+        <div>
+          <div class="page-ti">Saltend CCGT — Live Generation Status</div>
+          <div class="page-sub">Triton Power · 1,197 MW · 3 units · Humber Estuary · Data: Elexon BMRS (free, no key)</div>
+        </div>
+        <button class="ai-btn" style="width:auto;padding:.35rem .9rem" onclick="loadCCGT()">↻ Refresh</button>
+      </div>
+
+      <!-- Status cards row -->
+      <div id="ccgt-units" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.65rem;margin-bottom:1rem">
+        <div class="card"><div class="card-ti">Unit 1 (T_SALTB-1)</div><div style="font-size:.75rem;color:var(--mid)"><span class="sp"></span>Loading…</div></div>
+        <div class="card"><div class="card-ti">Unit 2 (T_SALTB-2)</div><div style="font-size:.75rem;color:var(--mid)"><span class="sp"></span>Loading…</div></div>
+        <div class="card"><div class="card-ti">Unit 3 (T_SALTB-3)</div><div style="font-size:.75rem;color:var(--mid)"><span class="sp"></span>Loading…</div></div>
+      </div>
+
+      <!-- Plant summary -->
+      <div id="ccgt-summary" class="card" style="margin-bottom:1rem">
+        <div style="font-size:.75rem;color:var(--mid);text-align:center;padding:.5rem"><span class="sp"></span>Loading plant summary…</div>
+      </div>
+
+      <!-- 24hr chart placeholder -->
+      <div id="ccgt-chart" class="card" style="margin-bottom:1rem"></div>
+
+      <!-- REMIT outages -->
+      <div id="ccgt-remit"></div>
+
+      <!-- Context -->
+      <div class="card" style="margin-top:.5rem">
+        <div class="card-ti" style="color:var(--teal)">Why Saltend Matters to the Chemical Cluster</div>
+        <div style="font-size:.75rem;color:var(--mid);line-height:1.8;margin-top:.35rem">
+          Saltend Power Station is a combined heat and power (CHP) plant supplying both electricity to the grid and <strong style="color:var(--text)">process steam to Saltend Chemicals Park</strong>. When a unit trips or goes offline, it directly affects:<br>
+          <strong style="color:var(--text)">INEOS Acetyls</strong> — acetic acid &amp; acetic anhydride production (900,000 t/yr)<br>
+          <strong style="color:var(--text)">Croda International</strong> — oleochemicals, requires continuous process heat<br>
+          <strong style="color:var(--text)">BP / INEOS</strong> — ethylene derivatives and ethyl acetate<br>
+          <strong style="color:var(--text)">Nippon Gohsei</strong> — EVOH production (world's largest line)<br><br>
+          Running status also indicates local industrial gas demand and is a proxy for Humber energy cost pressure.
+        </div>
+      </div>
+
+      <!-- Data source info -->
+      <div style="margin-top:.75rem;padding:.75rem;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;font-size:.72rem;color:#1e3a8a;line-height:1.7">
+        <strong>Data source:</strong> Elexon BMRS API — <code style="font-size:.68rem">data.elexon.co.uk/bmrs/api/v1</code> — completely free, no API key required.<br>
+        <strong>Physical Notifications (PN):</strong> updated every 30 mins, near real-time generation intent.<br>
+        <strong>B1610:</strong> actual reconciled metered output, ~5 working day lag.<br>
+        <strong>REMIT:</strong> mandatory outage notices — planned maintenance and unplanned trips.
+      </div>
     </div>
   </div>
 
@@ -947,16 +1002,195 @@ async function ask(inId,outId){
 }
 function setQ(q){document.getElementById('iq').value=q;}
 
+// ═══════════ SALTEND CCGT ═══════════
+
+const CCGT_STATUS_COLOR={running:'var(--green)',full_output:'var(--green)',partial_output:'var(--amber)',low_output:'var(--amber)',partial:'var(--amber)',low:'var(--amber)',offline:'var(--red)',unknown:'var(--dim)',data_unavailable:'var(--dim)'};
+const CCGT_STATUS_LABEL={running:'RUNNING',full_output:'FULL OUTPUT',partial_output:'PARTIAL',low_output:'LOW',partial:'PARTIAL',low:'LOW',offline:'OFFLINE',unknown:'UNKNOWN',data_unavailable:'NO DATA'};
+
+async function loadCCGT(){
+  const mini=document.getElementById('saltend-mini');
+  if(mini)mini.innerHTML='<span class="sp"></span>Loading…';
+  const unitsEl=document.getElementById('ccgt-units');
+  const summaryEl=document.getElementById('ccgt-summary');
+  const chartEl=document.getElementById('ccgt-chart');
+  const remitEl=document.getElementById('ccgt-remit');
+  if(unitsEl)unitsEl.innerHTML=[1,2,3].map(n=>`<div class="card"><div class="card-ti">Unit ${n} (T_SALTB-${n})</div><div style="font-size:.75rem;color:var(--mid)"><span class="sp"></span>Loading…</div></div>`).join('');
+  try{
+    const controller=new AbortController();
+    const tid=setTimeout(()=>controller.abort(),10000);
+    const r=await fetch('/api/ccgt',{signal:controller.signal});
+    clearTimeout(tid);
+    if(!r.ok)throw new Error('CCGT API '+r.status);
+    const d=await r.json();
+    renderCCGTUnits(d,unitsEl);
+    renderCCGTSummary(d,summaryEl);
+    renderCCGTChart(d,chartEl);
+    renderCCGTRemit(d,remitEl);
+    renderCCGTMini(d,mini);
+  }catch(e){
+    const err=`<div style="font-size:.72rem;color:var(--red);padding:.5rem">Error: ${e.message}<br><a href="https://bmrs.elexon.co.uk/balancing-mechanism-bmu-view?bmuId=T_SALTB-1&activeTab=Physical" target="_blank" style="color:var(--teal)">View on BMRS directly →</a></div>`;
+    if(unitsEl)unitsEl.innerHTML=err;
+    if(summaryEl)summaryEl.innerHTML=err;
+    if(mini)mini.innerHTML='<span style="color:var(--red);font-size:.65rem;padding:.4rem .9rem;display:block">⚠ Unavailable — <a href="https://bmrs.elexon.co.uk" target="_blank" style="color:var(--teal)">BMRS →</a></span>';
+  }
+}
+
+function renderCCGTUnits(d,el){
+  if(!el)return;
+  el.innerHTML=d.units.map((u,i)=>{
+    const col=CCGT_STATUS_COLOR[u.status]||'var(--dim)';
+    const lbl=CCGT_STATUS_LABEL[u.status]||u.status.toUpperCase();
+    const mw=u.current_mw!==null?`${u.current_mw} MW`:'No data';
+    const pts=u.pn&&u.pn.length>2?buildSparkline(u.pn.slice(-12).map(p=>p.mw),400):'';
+    return`<div class="card" style="border-left:3px solid ${col}">
+      <div class="card-ti">Unit ${i+1} · <span style="font-family:var(--mono);font-size:.6rem">${u.bmu}</span></div>
+      <div style="display:flex;align-items:center;gap:.5rem;margin:.3rem 0">
+        <div style="width:8px;height:8px;border-radius:50%;background:${col};flex-shrink:0${u.status==='running'||u.status==='full_output'?';animation:blink 2s infinite':''}"></div>
+        <div style="font-size:.7rem;font-weight:700;color:${col}">${lbl}</div>
+        <div style="font-family:var(--mono);font-size:.95rem;font-weight:500;color:var(--navy);margin-left:auto">${mw}</div>
+      </div>
+      ${pts?`<div style="height:28px;margin-top:.3rem">${pts}</div>`:''}
+      ${u.pn_error?`<div style="font-size:.6rem;color:var(--amber)">PN: ${u.pn_error}</div>`:''}
+    </div>`;
+  }).join('');
+}
+
+function renderCCGTSummary(d,el){
+  if(!el)return;
+  const s=d.summary;
+  const col=CCGT_STATUS_COLOR[s.plant_status]||'var(--dim)';
+  const lbl=CCGT_STATUS_LABEL[s.plant_status]||'UNKNOWN';
+  const pct=d.capacity_mw>0?Math.round((s.total_mw_output/d.capacity_mw)*100):0;
+  el.innerHTML=`<div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
+    <div><div style="font-size:.58rem;text-transform:uppercase;letter-spacing:.08em;color:var(--mid);margin-bottom:.2rem">Plant Status</div>
+      <div style="display:flex;align-items:center;gap:.5rem"><div style="width:10px;height:10px;border-radius:50%;background:${col}"></div>
+      <div style="font-size:.85rem;font-weight:700;color:${col}">${lbl}</div></div></div>
+    <div><div style="font-size:.58rem;text-transform:uppercase;letter-spacing:.08em;color:var(--mid);margin-bottom:.2rem">Total Output</div>
+      <div style="font-family:var(--mono);font-size:.9rem;font-weight:500;color:var(--navy)">${s.total_mw_output} <span style="font-size:.7rem;color:var(--mid)">MW</span></div></div>
+    <div><div style="font-size:.58rem;text-transform:uppercase;letter-spacing:.08em;color:var(--mid);margin-bottom:.2rem">Capacity Used</div>
+      <div style="font-family:var(--mono);font-size:.9rem;font-weight:500;color:var(--navy)">${pct}%</div></div>
+    <div><div style="font-size:.58rem;text-transform:uppercase;letter-spacing:.08em;color:var(--mid);margin-bottom:.2rem">Active Units</div>
+      <div style="font-family:var(--mono);font-size:.9rem;font-weight:500;color:var(--navy)">${s.running_units+s.partial_units}/3</div></div>
+    <div style="margin-left:auto;text-align:right">
+      <div style="font-size:.6rem;color:var(--dim)">Elexon BMRS · PN data</div>
+      <div style="font-size:.6rem;color:var(--dim)">${new Date(d.asOf).toLocaleTimeString('en-GB')}</div></div></div>
+  <div style="margin-top:.6rem;height:6px;background:var(--s3);border-radius:3px;overflow:hidden">
+    <div style="width:${pct}%;height:100%;border-radius:3px;background:${col};transition:width .8s ease"></div></div>
+  ${s.note?`<div style="font-size:.7rem;color:var(--mid);margin-top:.4rem">${s.note}</div>`:''}
+  ${s.plant_status==='data_unavailable'?`<div style="margin-top:.5rem;font-size:.72rem;color:var(--amber);background:rgba(245,158,11,.08);padding:.5rem .75rem;border-radius:6px;border-left:2px solid var(--amber)">
+    ⚠ PN data not returned for T_SALTB-1/2/3. BMU IDs may differ — <a href="https://bmrs.elexon.co.uk/balancing-mechanism-bmu-view" target="_blank" style="color:var(--teal)">verify on BMRS →</a> then update <code style="font-size:.65rem">api/ccgt.js</code></div>`:''}`;
+}
+
+function renderCCGTChart(d,el){
+  if(!el)return;
+  const allPN=[];
+  d.units.forEach(u=>(u.pn||[]).forEach(p=>allPN.push({time:new Date(p.time),mw:p.mw})));
+  if(allPN.length===0){
+    el.innerHTML=`<div class="card-ti">24hr Output (PN)</div><div style="font-size:.72rem;color:var(--mid);padding:.5rem 0">No PN data available. <a href="https://bmrs.elexon.co.uk/balancing-mechanism-bmu-view?bmuId=T_SALTB-1&activeTab=Physical" target="_blank" style="color:var(--teal)">View on BMRS →</a></div>`;
+    return;
+  }
+  const buckets={};
+  allPN.forEach(p=>{const b=Math.floor(p.time.getTime()/3600000)*3600000;buckets[b]=(buckets[b]||0)+p.mw;});
+  const times=Object.keys(buckets).sort();
+  const maxMW=Math.max(...Object.values(buckets),1);
+  const svgW=560,svgH=80,padL=40,padR=10,padT=10,padB=20;
+  const w=svgW-padL-padR,h=svgH-padT-padB;
+  const pts=times.map((t,i)=>{
+    const x=padL+(i/Math.max(times.length-1,1))*w;
+    const y=padT+h-(buckets[t]/maxMW)*h;
+    return`${x},${y}`;
+  }).join(' ');
+  const lbls=times.filter((_,i)=>i%Math.ceil(times.length/5)===0).map(t=>{
+    const i=times.indexOf(t);
+    const x=padL+(i/Math.max(times.length-1,1))*w;
+    const s=new Date(Number(t)).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+    return`<text x="${x}" y="${svgH-4}" text-anchor="middle" style="font-size:9px;fill:var(--mid)">${s}</text>`;
+  }).join('');
+  el.innerHTML=`<div class="card-ti">24hr Combined Output (PN — Physical Notifications)</div>
+    <svg viewBox="0 0 ${svgW} ${svgH}" width="100%" style="margin-top:.25rem">
+      <text x="36" y="${padT+4}" text-anchor="end" style="font-size:9px;fill:var(--mid)">${maxMW}MW</text>
+      <text x="36" y="${padT+h}" text-anchor="end" style="font-size:9px;fill:var(--mid)">0</text>
+      <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${padT+h}" stroke="var(--b1)" stroke-width="0.5"/>
+      <line x1="${padL}" y1="${padT+h}" x2="${padL+w}" y2="${padT+h}" stroke="var(--b1)" stroke-width="0.5"/>
+      <polyline points="${padL},${padT+h} ${pts} ${padL+w},${padT+h}" fill="rgba(8,145,178,.1)" stroke="none"/>
+      <polyline points="${pts}" fill="none" stroke="var(--teal)" stroke-width="1.5" stroke-linejoin="round"/>
+      ${lbls}
+    </svg>`;
+}
+
+function renderCCGTRemit(d,el){
+  if(!el)return;
+  if(!d.remit_outages||d.remit_outages.length===0){
+    el.innerHTML=`<div class="card"><div class="card-ti">REMIT Outage Notices</div><div style="font-size:.72rem;color:var(--mid);margin-top:.3rem">No REMIT notices found. <a href="https://bmrs.elexon.co.uk/remit" target="_blank" style="color:var(--teal)">Check BMRS REMIT →</a></div></div>`;
+    return;
+  }
+  el.innerHTML=`<div class="card"><div class="card-ti" style="color:var(--amber)">⚠ REMIT Outage Notices (${d.remit_outages.length})</div>
+    ${d.remit_outages.map(r=>`<div style="padding:.5rem 0;border-bottom:1px solid var(--b1);font-size:.75rem">
+      <div style="display:flex;gap:.5rem;align-items:center;margin-bottom:.2rem">
+        <span style="font-family:var(--mono);font-size:.62rem;color:var(--mid)">${r.bmu||''}</span>
+        <span style="font-size:.62rem;font-weight:700;color:var(--amber)">${r.type||'OUTAGE'}</span>
+        ${r.unavailableMW?`<span style="font-family:var(--mono);font-size:.65rem;color:var(--navy);margin-left:auto">${r.unavailableMW} MW</span>`:''}
+      </div>
+      ${r.reason?`<div style="color:var(--mid)">${r.reason}</div>`:''}
+      ${r.startTime?`<div style="font-size:.65rem;color:var(--dim);margin-top:.15rem">${new Date(r.startTime).toLocaleDateString('en-GB')} → ${r.endTime?new Date(r.endTime).toLocaleDateString('en-GB'):'TBC'}</div>`:''}
+    </div>`).join('')}
+  </div>`;
+}
+
+function renderCCGTMini(d,el){
+  if(!el)return;
+  const s=d.summary;
+  const col=CCGT_STATUS_COLOR[s.plant_status]||'var(--dim)';
+  const lbl=CCGT_STATUS_LABEL[s.plant_status]||'UNKNOWN';
+  const pct=d.capacity_mw>0?Math.round((s.total_mw_output/d.capacity_mw)*100):0;
+  el.innerHTML=`<div style="padding:.4rem .9rem .55rem">
+    <div style="display:flex;align-items:center;gap:.4rem;margin-bottom:.3rem">
+      <div style="width:7px;height:7px;border-radius:50%;background:${col};flex-shrink:0"></div>
+      <div style="font-size:.65rem;font-weight:700;color:${col}">${lbl}</div>
+      <div style="font-family:var(--mono);font-size:.72rem;color:var(--navy);margin-left:auto">${s.total_mw_output} MW</div>
+    </div>
+    <div style="height:4px;background:var(--s3);border-radius:2px;overflow:hidden">
+      <div style="width:${pct}%;height:100%;background:${col};border-radius:2px"></div></div>
+    <div style="display:flex;justify-content:space-between;margin-top:.25rem">
+      <div style="font-size:.6rem;color:var(--mid)">${s.running_units+s.partial_units}/3 units active</div>
+      <a href="#" onclick="switchToTab('ccgt');event.preventDefault()" style="font-size:.6rem;color:var(--teal)">Full view →</a></div>
+    ${s.active_remit>0?`<div style="font-size:.62rem;color:var(--amber);margin-top:.2rem">⚠ ${s.active_remit} REMIT notice${s.active_remit>1?'s':''}</div>`:''}
+  </div>`;
+}
+
+function buildSparkline(values,maxVal){
+  if(!values||values.length<2)return'';
+  const max=maxVal||Math.max(...values,1);
+  const w=200,h=28,pad=2;
+  const pts=values.map((v,i)=>{
+    const x=pad+(i/(values.length-1))*(w-pad*2);
+    const y=pad+(h-pad*2)-((v/max)*(h-pad*2));
+    return`${x},${y}`;
+  }).join(' ');
+  return`<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}"><polyline points="${pts}" fill="none" stroke="var(--teal)" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
+}
+
+function switchToTab(name){
+  document.querySelectorAll('.ntab').forEach(t=>t.classList.remove('act'));
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('act'));
+  const tab=document.querySelector(`[data-p="${name}"]`);
+  if(tab)tab.classList.add('act');
+  const pg=document.getElementById('pg-'+name);
+  if(pg)pg.classList.add('act');
+  if(name==='ccgt')loadCCGT();
+}
+
 // ═══════════ INIT ═══════════
 
 window.addEventListener('load',()=>{
-  loadSites();    // Load UK COMAH + EU Seveso sites from /api/sites
-  loadEnergy();   // Real carbon intensity + grid data
-  loadRivers();   // Real EA gauges + Rhine
-  loadNews();     // Real HSE/ECHA/EA RSS feeds
+  loadSites();
+  loadEnergy();
+  loadRivers();
+  loadNews();
 });
 document.querySelector('[data-p="planning"]').addEventListener('click',()=>{if(!allPlan.length)loadPlanning();});
 document.querySelector('[data-p="regulatory"]').addEventListener('click',()=>{if(!document.querySelector('#reg-list .reg-item'))loadReg();});
+document.querySelector('[data-p="ccgt"]').addEventListener('click',()=>{loadCCGT();});
 </script>
 </body>
 </html>
