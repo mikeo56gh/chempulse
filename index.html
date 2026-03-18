@@ -1891,13 +1891,145 @@ async function loadTEC() {
   document.getElementById('tec-table').style.display   = 'none';
   document.getElementById('tec-stats').style.display   = 'none';
 
+  // Fetch CSV directly from browser — NESO does not block browser requests,
+  // only server-side bots. Vercel is blocked; the browser is not.
+  const BASE = 'https://api.neso.energy';
+  const DATASET = 'cbd45e54-e6e2-4a38-99f1-8de6fd96d7c1';
+  const RESOURCE = '17becbab-e3e8-473f-b303-3806f43a6a10';
+  const MONTHS = ['january','february','march','april','may','june',
+                  'july','august','september','october','november','december'];
+
+  function candidates(weeksBack = 8) {
+    const urls = [], now = new Date();
+    for (let d = 0; d < weeksBack * 7; d++) {
+      const date = new Date(now); date.setDate(date.getDate() - d);
+      const day = date.getDate(), mon = MONTHS[date.getMonth()], yr = date.getFullYear();
+      const dd = String(day).padStart(2,'0');
+      for (const ds of [dd, String(day)]) {
+        urls.push(`${BASE}/dataset/${DATASET}/resource/${RESOURCE}/download/tec-register-${ds}-${mon}-${yr}.csv`);
+      }
+    }
+    return [...new Set(urls)];
+  }
+
+  function parseCSV(text) {
+    const rows=[],CR=13,LF=10,COMMA=44,QUOTE=34;
+    let field='',row=[],inQ=false;
+    for(let i=0;i<text.length;i++){
+      const code=text.charCodeAt(i),c=text[i];
+      if(code===QUOTE){if(inQ&&text.charCodeAt(i+1)===QUOTE){field+=c;i++;}else inQ=!inQ;}
+      else if(code===COMMA&&!inQ){row.push(field.trim());field='';}
+      else if((code===LF||code===CR)&&!inQ){
+        if(code===CR&&text.charCodeAt(i+1)===LF)i++;
+        row.push(field.trim());field='';
+        if(row.some(f=>f))rows.push(row);row=[];
+      } else field+=c;
+    }
+    if(field||row.length){row.push(field.trim());rows.push(row);}
+    return rows;
+  }
+
   try {
-    const ctrl = new AbortController();
-    const tid  = setTimeout(() => ctrl.abort(), 28000);
-    const r    = await fetch('/api/tec', { signal: ctrl.signal });
-    clearTimeout(tid);
-    const d    = await r.json();
-    if (!r.ok || d.error) throw new Error(d.error || 'TEC API ' + r.status);
+    // Try candidate URLs — browser can fetch these directly
+    const urls = candidates(8);
+    let csvText = null, csvUrl = null;
+
+    for (let i = 0; i < urls.length; i++) {
+      try {
+        const r = await fetch(urls[i], { signal: AbortSignal.timeout(8000) });
+        if (!r.ok) continue;
+        const text = await r.text();
+        const first = text.split('\n')[0].toLowerCase();
+        if (first.includes('company') || first.includes('gsp') || first.includes('tec')) {
+          csvText = text; csvUrl = urls[i]; break;
+        }
+      } catch(e) { continue; }
+    }
+
+    if (!csvText) throw new Error('Could not fetch TEC CSV from NESO. The file may have moved — check neso.energy/data-portal/transmission-entry-capacity-tec-register');
+
+    const rows = parseCSV(csvText);
+    if (rows.length < 2) throw new Error('CSV parsed but returned fewer than 2 rows');
+
+    // Detect column indices
+    const headers = rows[0].map(h => h.trim().toLowerCase().replace(/[^a-z0-9\s]/g,'').replace(/\s+/g,' '));
+    const fi = (...c) => { for (const s of c) { const i = headers.findIndex(h => h.includes(s)); if (i>=0) return i; } return -1; };
+    const col = {
+      id:      fi('project no','project id'),
+      company: fi('company name','company'),
+      tech:    fi('technology'),
+      tec:     headers.findIndex(h => h === 'tec' || (h.startsWith('tec') && !h.includes('stec') && !h.includes('ldtec') && !h.includes('temp'))),
+      gsp:     headers.findIndex(h => (h.includes('gsp') || h.includes('grid supply')) && !h.includes('group')),
+      gspGrp:  fi('gsp group','gsp grp'),
+      stage:   fi('stage'),
+      gate:    fi('gate'),
+      energ:   fi('energisation'),
+      status:  fi('status'),
+    };
+    const get = (row, k) => col[k] >= 0 ? (row[col[k]] || '').trim() : '';
+
+    const CLUSTER_MAP = {
+      SALTEND:'Humber','SOUTH HUMBER':'Humber',KILLINGHOLME:'Humber',KEADBY:'Humber',
+      GRIMSBY:'Humber','BICKER FEN':'Humber',DRAX:'Humber',EGGBOROUGH:'Humber',
+      FERRYBRIDGE:'Humber','WEST BURTON':'Humber','CREYKE BECK':'Humber',
+      'SEAL SANDS':'Teesside',TEESSIDE:'Teesside',LACKENBY:'Teesside',
+      HARTLEPOOL:'Teesside',WILTON:'Teesside',
+      GRANGEMOUTH:'Grangemouth',LONGANNET:'Grangemouth',MOSSMORRAN:'Grangemouth',
+      FRODSHAM:'Runcorn',STANLOW:'Runcorn',DEESIDE:'Runcorn',BREDBURY:'Runcorn',
+      HEYSHAM:'Nuclear',SIZEWELL:'Nuclear',HINKLEY:'Nuclear',
+      DUNGENESS:'Nuclear',TORNESS:'Nuclear',HUNTERSTON:'Nuclear',
+      PETERHEAD:'Scotland',BLACKHILLOCK:'Scotland',INVERNESS:'Scotland',HARKER:'Scotland',
+    };
+    function getCluster(gsp) {
+      if (!gsp) return 'Other';
+      const u = gsp.toUpperCase();
+      for (const [k,v] of Object.entries(CLUSTER_MAP)) if (u.includes(k)) return v;
+      if (/YORK|LEEDS|BRADFORD|HULL|LINCOLN|NOTTING|DERBY|SHEFFIELD/.test(u)) return 'Yorkshire';
+      if (/EDINBURGH|GLASGOW|STIRLING|FIFE|ANGUS|ABERDEEN|HIGHLAND|ARGYLL|DUNBAR/.test(u)) return 'Scotland';
+      if (/WALES|CARDIFF|SWANSEA|NEWPORT|PEMBROKE/.test(u)) return 'Wales';
+      if (/KENT|SURREY|ESSEX|SUFFOLK|NORFOLK|CAMBS/.test(u)) return 'South East';
+      if (/DEVON|CORNWALL|DORSET|SOMERSET|WILTS|HANTS|BRISTOL/.test(u)) return 'South West';
+      if (/MIDLAND|BIRMINGHAM|COVENTRY|STAFFORD|WORCESTER|LEICS/.test(u)) return 'Midlands';
+      if (/MANCHESTER|LIVERPOOL|LANCASHIRE|CHESHIRE|CUMBRIA/.test(u)) return 'North West';
+      return 'Other';
+    }
+    function normTech(raw) {
+      const t=(raw||'').toLowerCase();
+      if (t.includes('offshore')) return 'Offshore Wind';
+      if (t.includes('wind'))     return 'Onshore Wind';
+      if (t.includes('solar'))    return 'Solar';
+      if (t.includes('battery')||t.includes('storage')) return 'Battery Storage';
+      if (t.includes('hydrogen')) return 'Hydrogen';
+      if (t.includes('nuclear'))  return 'Nuclear';
+      if (t.includes('gas')||t.includes('ccgt')||t.includes('ocgt')) return 'Gas';
+      if (t.includes('biomass'))  return 'Biomass';
+      if (t.includes('interconnect')) return 'Interconnector';
+      if (t.includes('hydro'))    return 'Hydro';
+      if (t.includes('ccs')||t.includes('ccus')||t.includes('carbon capture')) return 'CCS/CCUS';
+      return raw||'Other';
+    }
+
+    const records = []; const clusterTot = {}, techCnt = {}; let totalMW = 0;
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i]; if (!row||row.length<3) continue;
+      const company = get(row,'company'), gsp = get(row,'gsp')||get(row,'gspGrp');
+      if (!company&&!gsp) continue;
+      const cluster = getCluster(gsp), tech = normTech(get(row,'tech'));
+      const mw = parseFloat(get(row,'tec'))||0, gate = get(row,'gate');
+      totalMW += mw;
+      clusterTot[cluster] = (clusterTot[cluster]||0) + mw;
+      techCnt[tech]       = (techCnt[tech]||0) + 1;
+      records.push({
+        project_no: get(row,'id'), company, technology: tech,
+        technology_raw: get(row,'tech'), tec_mw: mw, gsp, cluster,
+        stage: get(row,'stage'), gate,
+        gate_label: gate==='1'?'Gate 1 — firm': gate==='2'?'Gate 2 — queue': gate||'',
+        energisation: get(row,'energ'), status: get(row,'status'),
+      });
+    }
+    records.sort((a,b) => a.cluster.localeCompare(b.cluster)||b.tec_mw-a.tec_mw);
+    const clusters = Object.entries(clusterTot).sort((a,b)=>b[1]-a[1]).map(([cluster,mw])=>({cluster,mw:Math.round(mw)}));
+    const d = { records, meta: { total_records: records.length, total_mw: Math.round(totalMW), clusters, tech_counts: techCnt, csv_url: csvUrl } };
 
     tecRecords     = d.records || [];
     tecDataLoaded  = true;
@@ -1925,7 +2057,6 @@ async function loadTEC() {
     document.getElementById('tec-s-g2').textContent = g2.toLocaleString();
 
     // Cluster bar
-    const clusters = d.meta.clusters || [];
     const maxMW = clusters[0]?.mw || 1;
     document.getElementById('tec-cluster-bar').innerHTML = clusters.slice(0,8).map(c => {
       const col = TEC_CLUSTER_COL[c.cluster] || '#94a3b8';
