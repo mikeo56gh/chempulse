@@ -1902,6 +1902,20 @@ async function loadTEC() {
     tecRecords     = d.records || [];
     tecDataLoaded  = true;
 
+    // If 0 records, show debug info from meta
+    if (!tecRecords.length) {
+      const m = d.meta || {};
+      document.getElementById('tec-loading').style.display = 'none';
+      document.getElementById('tec-error').style.display   = 'block';
+      document.getElementById('tec-error').innerHTML =
+        `<strong>TEC loaded but 0 records parsed.</strong><br>
+         CSV: <span style="font-family:var(--font-mono);font-size:.65rem">${m.csv_url||'unknown'}</span><br>
+         Headers detected: <span style="font-family:var(--font-mono);font-size:.65rem">${(m.headers_detected||[]).join(' | ')}</span><br>
+         Column indices: <span style="font-family:var(--font-mono);font-size:.65rem">${JSON.stringify(m.col_indices||{})}</span><br>
+         <a href="${m.csv_url||'https://www.neso.energy/data-portal/transmission-entry-capacity-tec-register'}" target="_blank" style="color:var(--teal)">Open CSV directly →</a>`;
+      return;
+    }
+
     // Stats
     document.getElementById('tec-s-total').textContent = tecRecords.length.toLocaleString();
     document.getElementById('tec-s-mw').textContent    = (Math.round((d.meta.total_mw||0)/1000*10)/10).toLocaleString() + ' GW';
