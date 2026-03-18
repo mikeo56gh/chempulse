@@ -823,26 +823,35 @@ function parseIdox(html,council,baseUrl){
 
 async function loadPlanning(){
   const el=document.getElementById('planning-list');
-  el.innerHTML='<div class="loading-ph"><span class="sp"></span>Loading Hull, East Riding &amp; Planning Inspectorate data…</div>';
+  el.innerHTML='<div class="loading-ph"><span class="sp"></span>Checking Planning Inspectorate database…</div>';
   allPlan=[];
+
+  // Hard 7-second timeout on the API call — if it hangs, go straight to AI
   try{
-    const r=await fetch('/api/planning');
-    if(!r.ok)throw new Error('planning API '+r.status);
-    const d=await r.json();
-    if(d.items&&d.items.length>0){
-      allPlan=d.items;
-      renderPlanning(allPlan);
-      return;
+    const controller=new AbortController();
+    const tid=setTimeout(()=>controller.abort(),7000);
+    const r=await fetch('/api/planning',{signal:controller.signal});
+    clearTimeout(tid);
+    if(r.ok){
+      const d=await r.json();
+      window._planCouncilLinks=d.council_links||{};
+      if(d.items&&d.items.length>0){
+        allPlan=d.items;
+        renderPlanning(allPlan);
+        return;
+      }
     }
-    throw new Error('no items');
   }catch(e){
-    await loadPlanFallback();
+    // Timed out or network error — fall through immediately
   }
+
+  // Straight to AI fallback
+  await loadPlanFallback();
 }
 
 async function loadPlanFallback(){
   const el=document.getElementById('planning-list');
-  el.innerHTML='<div class="loading-ph"><span class="sp"></span>Generating Humber energy planning intelligence…</div>';
+  el.innerHTML='<div class="loading-ph"><span class="sp"></span>Generating Hull &amp; East Yorkshire planning intelligence (5–10 secs)…</div>';
   try{
     const r=await fetch('/api/query',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1500,system:'Return ONLY valid JSON array.',messages:[{role:'user',content:'Generate 12 realistic 2024-2025 planning applications for Hull City Council and East Riding of Yorkshire on energy/industrial keywords: solar, BESS, wind, hydrogen, chemical. Base around Humber Estuary, Saltend, South Humber Bank. Reference real projects: H2H Saltend, Humber Zero, Viking CCS, Orsted. JSON: [{title,desc,address,date,status,keyword,council,link}] status=Pending|Approved|Refused. Also include 3 nationally significant infrastructure projects from the Planning Inspectorate.'}]})});
     const d=await r.json();
@@ -860,7 +869,9 @@ function renderPlanning(items){
   const f=planF?items.filter(p=>p.keyword===planF||p.title?.toLowerCase().includes(planF)):items;
   if(!f.length){el.innerHTML='<div class="loading-ph">No items — try Refresh or change filter.</div>';return;}
   el.innerHTML=f.map(p=>`<div class="plan-item" onclick="window.open('${p.link||'#'}','_blank')"><div class="plan-meta"><span class="plan-kw">${(p.keyword||'energy').toUpperCase()}</span><span class="plan-council">${p.council}</span><span class="${PSC[p.status]||'ps-pen'}" style="margin-left:auto">${p.status||'Pending'}</span></div><div class="plan-ti">${p.title}</div>${p.address?`<div class="plan-addr">📍 ${p.address}</div>`:''} ${p.desc&&p.desc!==p.title?`<div style="font-size:.68rem;color:var(--mid);margin-top:.2rem">${p.desc.slice(0,180)}</div>`:''} ${p.date?`<div class="plan-date" style="margin-top:.3rem">Validated: ${p.date}</div>`:''}</div>`).join('');
-  el.innerHTML+=`<div style="font-size:.62rem;color:var(--mid);padding:.5rem 0;border-top:1px solid var(--b1);margin-top:.25rem">${f.length} applications · <a href="https://www.hullcc.gov.uk/padcbc/publicaccess-live/" target="_blank" style="color:var(--teal)">Hull Public Access →</a> · <a href="https://newplanningaccess.eastriding.gov.uk/online-applications/" target="_blank" style="color:var(--teal)">East Riding →</a></div>`;
+  const hullLink=(window._planCouncilLinks?.hull)||'https://www.hullcc.gov.uk/padcbc/publicaccess-live/search.do?action=weeklyList';
+  const erLink=(window._planCouncilLinks?.east_riding)||'https://newplanningaccess.eastriding.gov.uk/online-applications/search.do?action=weeklyList';
+  el.innerHTML+=`<div style="font-size:.62rem;color:var(--mid);padding:.6rem .2rem;border-top:1px solid var(--b1);margin-top:.25rem;line-height:1.8">${f.length} applications shown · <a href="${hullLink}" target="_blank" style="color:var(--teal)">Hull weekly list →</a> · <a href="${erLink}" target="_blank" style="color:var(--teal)">East Riding weekly list →</a><br>Hull and East Riding portals block automated scraping — use the links above to search directly by keyword.</div>`;
 }
 function togPlanF(kw,el){planF=kw;document.querySelectorAll('#pg-planning .fchip').forEach(c=>c.classList.remove('act'));el.classList.add('act');renderPlanning(allPlan)}
 
