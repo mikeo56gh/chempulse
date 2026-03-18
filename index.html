@@ -633,6 +633,7 @@ nav::-webkit-scrollbar{display:none}
         <option value="500">500+ MW</option>
       </select>
       <span id="repd-count" style="margin-left:auto;font-size:.65rem;color:var(--mid)"></span>
+      <span id="tec-toggle-btn" class="fchip" onclick="toggleTECLayer()" style="margin-left:.25rem;border:1px solid #06b6d4;color:#0891b2" title="Toggle TEC pipeline layer">⚡ TEC pipeline</span>
       <button class="ai-btn" style="width:auto;padding:.25rem .75rem;margin-left:.25rem;font-size:.7rem" onclick="toggleRepdView()">⇄ Table</button>
     </div>
 
@@ -674,6 +675,18 @@ nav::-webkit-scrollbar{display:none}
           <button class="ai-btn" style="width:auto;padding:.4rem 1rem" onclick="loadREPD()">↻ Retry</button>
         </div>
       </div>
+    </div>
+
+    <!-- TEC stats panel -->
+    <div id="tec-panel" style="display:none;position:absolute;top:.5rem;right:.5rem;z-index:400;background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:.65rem .85rem;min-width:220px;max-width:280px;max-height:60%;overflow-y:auto;box-shadow:0 4px 16px rgba(0,0,0,.12)">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem">
+        <div style="font-size:.72rem;font-weight:500;color:#1e293b">⚡ TEC Register</div>
+        <button onclick="document.getElementById('tec-panel').style.display='none'" style="background:none;border:none;cursor:pointer;color:#64748b;font-size:.9rem;line-height:1">✕</button>
+      </div>
+      <div id="tec-panel-content" style="font-size:.68rem;color:#475569">
+        <span style="color:#94a3b8">Loading…</span>
+      </div>
+      <div style="margin-top:.5rem;font-size:.6rem;color:#94a3b8;border-top:1px solid #f1f5f9;padding-top:.4rem">NESO TEC Register · Updated twice weekly</div>
     </div>
 
     <!-- Detail panel (slides up on marker click) -->
@@ -1749,6 +1762,207 @@ function renderREMIT(d,el){
     <div style="font-size:.62rem;color:var(--dim);padding:.3rem 0">
       Monitoring Humber &amp; Teesside area CCGTs · <a href="https://bmrs.elexon.co.uk/remit" target="_blank" style="color:var(--teal)">Full REMIT register →</a>
     </div>`;
+}
+
+// ═══════════ TEC REGISTER ═══════════
+
+let tecData = null, tecLoaded = false, tecLayer = null, tecVisible = false;
+
+const TEC_TECH_COLORS = {
+  'Offshore Wind':   '#0ea5e9',
+  'Wind Onshore':    '#3b82f6',
+  'Solar':           '#f59e0b',
+  'Battery Storage': '#8b5cf6',
+  'Hydrogen':        '#06b6d4',
+  'Nuclear':         '#ec4899',
+  'Gas (CCGT/OCGT)': '#ef4444',
+  'Biomass':         '#22c55e',
+  'Interconnector':  '#f97316',
+  'Marine':          '#14b8a6',
+  'CCS/CCUS':        '#a855f7',
+  'Other':           '#94a3b8',
+};
+
+const CLUSTER_COLORS = {
+  'Humber':      '#06b6d4',
+  'Teesside':    '#3b82f6',
+  'Grangemouth': '#8b5cf6',
+  'Runcorn':     '#f59e0b',
+  'Offshore':    '#0ea5e9',
+  'Nuclear':     '#ec4899',
+  'Thames':      '#64748b',
+};
+
+function tecDot(color, mw) {
+  // Size by MW — bigger dot for larger contracted capacity
+  const size = mw >= 1000 ? 18 : mw >= 500 ? 14 : mw >= 100 ? 11 : mw >= 10 ? 9 : 7;
+  return L.divIcon({
+    className: '',
+    html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};border:2px solid rgba(255,255,255,.85);box-shadow:0 0 0 1.5px ${color}80,0 2px 6px rgba(0,0,0,.25);opacity:.9"></div>`,
+    iconSize: [size, size],
+    iconAnchor: [size/2, size/2]
+  });
+}
+
+async function loadTEC() {
+  if (tecLoaded) { renderTECLayer(); return; }
+  const panelContent = document.getElementById('tec-panel-content');
+  if (panelContent) panelContent.innerHTML = '<span style="color:#94a3b8">Fetching from NESO…</span>';
+  try {
+    const controller = new AbortController();
+    const tid = setTimeout(() => controller.abort(), 25000);
+    const r = await fetch('/api/tec', { signal: controller.signal });
+    clearTimeout(tid);
+    if (!r.ok) throw new Error('TEC API ' + r.status);
+    const gj = await r.json();
+    if (gj.error) throw new Error(gj.error);
+    tecData = gj;
+    tecLoaded = true;
+    renderTECLayer();
+    renderTECPanel(gj.meta);
+  } catch(e) {
+    if (panelContent) panelContent.innerHTML = `<span style="color:#ef4444">Error: ${e.message}</span>`;
+  }
+}
+
+function renderTECLayer() {
+  if (!repdMap || !tecData) return;
+  if (tecLayer) { repdMap.removeLayer(tecLayer); tecLayer = null; }
+
+  const layers = [];
+  tecData.features.forEach(f => {
+    if (!f.geometry) return;
+    const [lng, lat] = f.geometry.coordinates;
+    const p = f.properties;
+    const color = TEC_TECH_COLORS[p.technology] || '#94a3b8';
+    const marker = L.marker([lat, lng], { icon: tecDot(color, p.tec_mw) });
+    marker.on('click', () => showTECDetail(p));
+    layers.push(marker);
+  });
+
+  tecLayer = L.layerGroup(layers);
+  if (tecVisible) tecLayer.addTo(repdMap);
+}
+
+function toggleTECLayer() {
+  const btn = document.getElementById('tec-toggle-btn');
+  const panel = document.getElementById('tec-panel');
+
+  if (!tecLoaded) {
+    // First activation — load data and show panel
+    tecVisible = true;
+    panel.style.display = 'block';
+    btn.classList.add('act');
+    loadTEC();
+    return;
+  }
+
+  tecVisible = !tecVisible;
+  btn.classList.toggle('act', tecVisible);
+  panel.style.display = tecVisible ? 'block' : 'none';
+
+  if (tecVisible) {
+    if (tecLayer) tecLayer.addTo(repdMap);
+  } else {
+    if (tecLayer) repdMap.removeLayer(tecLayer);
+  }
+}
+
+function renderTECPanel(meta) {
+  if (!meta) return;
+  const el = document.getElementById('tec-panel-content');
+  if (!el) return;
+
+  // Top clusters by MW
+  const clusters = Object.entries(meta.cluster_mw || {})
+    .sort((a,b) => b[1]-a[1])
+    .slice(0, 6);
+
+  // Top technologies by count
+  const techs = Object.entries(meta.tech_counts || {})
+    .sort((a,b) => b[1]-a[1])
+    .slice(0, 6);
+
+  el.innerHTML = `
+    <div style="margin-bottom:.5rem;padding-bottom:.4rem;border-bottom:1px solid #f1f5f9">
+      <div style="display:flex;justify-content:space-between;margin-bottom:.2rem">
+        <span style="color:#64748b">Total projects</span>
+        <span style="color:#1e293b;font-weight:500">${(meta.total_features||0).toLocaleString()}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:.2rem">
+        <span style="color:#64748b">Mapped to clusters</span>
+        <span style="color:#1e293b;font-weight:500">${(meta.mapped_to_coords||0).toLocaleString()}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between">
+        <span style="color:#64748b">Mapped capacity</span>
+        <span style="color:#0891b2;font-weight:500;font-family:var(--mono)">${((meta.mapped_mw||0)/1000).toFixed(1)} GW</span>
+      </div>
+    </div>
+    <div style="font-size:.6rem;text-transform:uppercase;letter-spacing:.07em;color:#94a3b8;margin-bottom:.3rem">Cluster pipeline (MW contracted)</div>
+    ${clusters.map(([cluster, mw]) => `
+      <div style="display:flex;justify-content:space-between;margin-bottom:.2rem;align-items:center">
+        <div style="display:flex;align-items:center;gap:.3rem">
+          <div style="width:7px;height:7px;border-radius:50%;background:${CLUSTER_COLORS[cluster]||'#94a3b8'};flex-shrink:0"></div>
+          <span style="color:#475569">${cluster}</span>
+        </div>
+        <span style="font-family:var(--font-mono);color:#1e293b;font-size:.65rem">${Math.round(mw).toLocaleString()} MW</span>
+      </div>`).join('')}
+    <div style="font-size:.6rem;text-transform:uppercase;letter-spacing:.07em;color:#94a3b8;margin:.4rem 0 .3rem">By technology (project count)</div>
+    ${techs.map(([tech, count]) => `
+      <div style="display:flex;justify-content:space-between;margin-bottom:.2rem;align-items:center">
+        <div style="display:flex;align-items:center;gap:.3rem">
+          <div style="width:7px;height:7px;border-radius:50%;background:${TEC_TECH_COLORS[tech]||'#94a3b8'};flex-shrink:0"></div>
+          <span style="color:#475569;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${tech}</span>
+        </div>
+        <span style="font-family:var(--font-mono);color:#1e293b;font-size:.65rem">${count}</span>
+      </div>`).join('')}`;
+}
+
+function showTECDetail(p) {
+  const color = TEC_TECH_COLORS[p.technology] || '#94a3b8';
+  const clusterColor = CLUSTER_COLORS[p.cluster] || '#94a3b8';
+  const detail = document.getElementById('repd-detail');
+  const gateLabel = p.gate === '1' ? '🔒 Gate 1 (firm)' : p.gate === '2' ? '📋 Gate 2 (queue)' : '';
+
+  document.getElementById('repd-detail-content').innerHTML = `
+    <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.3rem;flex-wrap:wrap">
+      <div style="font-size:.65rem;font-weight:700;padding:2px 7px;border-radius:3px;background:${color}20;color:${color}">TEC</div>
+      ${p.cluster ? `<div style="font-size:.65rem;font-weight:700;padding:2px 7px;border-radius:3px;background:${clusterColor}20;color:${clusterColor}">${p.cluster} cluster</div>` : ''}
+      ${gateLabel ? `<div style="font-size:.65rem;font-weight:500;color:#475569">${gateLabel}</div>` : ''}
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:.75rem;align-items:flex-start">
+      <div style="flex:1;min-width:200px">
+        <div style="font-size:.85rem;font-weight:500;color:#1e293b;margin-bottom:.2rem">${p.company || 'Unknown company'}</div>
+        <div style="display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:.3rem">
+          <span style="font-size:.65rem;font-weight:700;padding:2px 7px;border-radius:3px;background:${color}20;color:${color}">${p.technology}</span>
+          ${p.site_context ? `<span style="font-size:.65rem;color:#64748b">${p.site_context}</span>` : ''}
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.5rem;font-size:.72rem">
+        <div><div style="color:#64748b;font-size:.6rem;text-transform:uppercase;letter-spacing:.06em">Contracted TEC</div>
+          <div style="font-family:var(--font-mono);font-weight:500;color:#0891b2;font-size:.85rem">${p.tec_mw ? p.tec_mw.toLocaleString()+' MW' : '—'}</div></div>
+        <div><div style="color:#64748b;font-size:.6rem;text-transform:uppercase;letter-spacing:.06em">GSP / Substation</div>
+          <div style="color:#1e293b">${p.gsp || '—'}</div></div>
+        <div><div style="color:#64748b;font-size:.6rem;text-transform:uppercase;letter-spacing:.06em">Energisation</div>
+          <div style="color:#1e293b">${p.energisation || '—'}</div></div>
+        <div><div style="color:#64748b;font-size:.6rem;text-transform:uppercase;letter-spacing:.06em">Project ID</div>
+          <div style="font-family:var(--font-mono);font-size:.6rem;color:#64748b">${p.project_id || '—'}</div></div>
+        <div><div style="color:#64748b;font-size:.6rem;text-transform:uppercase;letter-spacing:.06em">Stage</div>
+          <div style="color:#1e293b">${p.stage || '—'}</div></div>
+        <div><div style="color:#64748b;font-size:.6rem;text-transform:uppercase;letter-spacing:.06em">Status</div>
+          <div style="color:#1e293b">${p.status || '—'}</div></div>
+      </div>
+    </div>
+    ${p.technology === 'Hydrogen' || p.technology === 'CCS/CCUS' ? `
+    <div style="margin-top:.4rem;font-size:.68rem;color:#0891b2;background:#eff6ff;border-radius:4px;padding:.35rem .6rem;border-left:2px solid #0891b2">
+      ⚡ Low-carbon / net zero technology — directly relevant to chemical cluster decarbonisation
+    </div>` : ''}
+    ${p.technology === 'Gas (CCGT/OCGT)' ? `
+    <div style="margin-top:.4rem;font-size:.68rem;color:#64748b;background:#f8fafc;border-radius:4px;padding:.35rem .6rem;border-left:2px solid #cbd5e1">
+      Gas-fired generation — may supply CHP steam to adjacent chemical sites
+    </div>` : ''}`;
+
+  detail.style.display = 'block';
 }
 
 // ═══════════ INIT ═══════════
