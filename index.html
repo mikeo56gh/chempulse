@@ -1613,7 +1613,14 @@ function renderTemp(d,el,miniEl){
 
 function renderREMIT(d,el){
   if(!el)return;
-  if(!d.remit){el.innerHTML=`<div style="font-size:.72rem;color:var(--amber);padding:.5rem">${d.remit_error||'REMIT data unavailable'}</div>`;return;}
+  if(!d.remit){
+    const debug=d.remit_debug?`<br><span style="font-family:var(--font-mono);font-size:.65rem;color:var(--dim)">Debug: ${JSON.stringify(d.remit_debug).slice(0,200)}</span>`:'';
+    el.innerHTML=`<div style="font-size:.72rem;color:var(--amber);padding:.5rem;background:rgba(245,158,11,.06);border-radius:6px;border-left:2px solid var(--amber)">
+      REMIT data unavailable: ${d.remit_error||'unknown error'}${debug}<br>
+      <a href="https://bmrs.elexon.co.uk/remit" target="_blank" style="color:var(--teal)">View REMIT on BMRS directly →</a>
+    </div>`;
+    return;
+  }
   const rm=d.remit;
   if(rm.total_found===0){
     el.innerHTML=`<div class="card"><div style="font-size:.75rem;color:var(--green);padding:.25rem 0">✓ No active or upcoming outage notices for monitored plants in the next 14 days.</div>
