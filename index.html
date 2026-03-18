@@ -1792,7 +1792,225 @@ const CLUSTER_COLORS = {
   'Offshore':    '#0ea5e9',
   'Nuclear':     '#ec4899',
   'Thames':      '#64748b',
+  'Scotland':    '#8b5cf6',
+  'Wales':       '#22c55e',
+  'East':        '#a78bfa',
+  'Midlands':    '#f97316',
+  'South':       '#94a3b8',
 };
+
+// normaliseTechTEC — same as normaliseTech but accessible from processTECRecords
+function normaliseTechTEC(raw) {
+  const t = (raw||'').toLowerCase();
+  if (t.includes('offshore wind')||t.includes('offshore')) return 'Offshore Wind';
+  if (t.includes('onshore wind')||(t.includes('wind')&&!t.includes('offshore'))) return 'Wind Onshore';
+  if (t.includes('solar')||t.includes('photovoltaic')) return 'Solar';
+  if (t.includes('battery')||t.includes('storage')) return 'Battery Storage';
+  if (t.includes('hydrogen')) return 'Hydrogen';
+  if (t.includes('nuclear')) return 'Nuclear';
+  if (t.includes('gas')||t.includes('ccgt')||t.includes('ocgt')) return 'Gas (CCGT/OCGT)';
+  if (t.includes('biomass')) return 'Biomass';
+  if (t.includes('interconnect')) return 'Interconnector';
+  if (t.includes('hydro')) return 'Hydro';
+  if (t.includes('tidal')||t.includes('wave')||t.includes('marine')) return 'Marine';
+  if (t.includes('carbon capture')||t.includes('ccus')||t.includes('ccs')) return 'CCS/CCUS';
+  return raw||'Other';
+}
+
+// Comprehensive GB GSP coordinate lookup — ~200 substations
+// Covers all major transmission GSPs in England, Scotland, Wales
+const TEC_GSP_COORDS = {
+  // ── Humber / Yorkshire cluster ────────────────────────────────────────────
+  'SALTEND':            {lat:53.7296,lng:-0.2413,cluster:'Humber',    site:'Saltend Chemicals Park'},
+  'SOUTH HUMBER BANK':  {lat:53.6215,lng:-0.1956,cluster:'Humber',    site:'South Humber Bank industrial'},
+  'SOUTH HUMBER':       {lat:53.6215,lng:-0.1956,cluster:'Humber',    site:'South Humber Bank'},
+  'KILLINGHOLME':       {lat:53.6380,lng:-0.2340,cluster:'Humber',    site:'South Humber Bank'},
+  'KEADBY':             {lat:53.5890,lng:-0.7420,cluster:'Humber',    site:'Keadby / Scunthorpe'},
+  'GRIMSBY WEST':       {lat:53.5630,lng:-0.0960,cluster:'Humber',    site:'Grimsby / South Humber'},
+  'GRIMSBY':            {lat:53.5630,lng:-0.0960,cluster:'Humber',    site:'Grimsby'},
+  'BICKER FEN':         {lat:52.9770,lng:-0.2070,cluster:'Humber',    site:'Lincolnshire coast'},
+  'DRAX':               {lat:53.7367,lng:-1.0261,cluster:'Humber',    site:'Drax Power Station'},
+  'EGGBOROUGH':         {lat:53.7163,lng:-1.1189,cluster:'Humber',    site:'Yorkshire / Humber'},
+  'FERRYBRIDGE':        {lat:53.7080,lng:-1.2880,cluster:'Humber',    site:'Yorkshire'},
+  'WEST BURTON':        {lat:53.3760,lng:-0.7930,cluster:'Humber',    site:'Nottinghamshire'},
+  'CREYKE BECK':        {lat:53.8500,lng:-0.4800,cluster:'Humber',    site:'Humber coast'},
+  'HUMBER GATEWAY':     {lat:53.6500,lng:-0.0500,cluster:'Humber',    site:'Humber Gateway offshore'},
+  'HORNSEA':            {lat:53.9180,lng: 0.1620,cluster:'Offshore',  site:'Hornsea offshore wind'},
+  'NUNTHORPE':          {lat:54.5260,lng:-1.1380,cluster:'Teesside',  site:'Teesside'},
+  'THORNTON':           {lat:53.8390,lng:-1.5280,cluster:'Humber',    site:'Yorkshire'},
+  'BRADFORD WEST':      {lat:53.7940,lng:-1.7830,cluster:'Humber',    site:'West Yorkshire'},
+  'BRADFORD EAST':      {lat:53.8001,lng:-1.7291,cluster:'Humber',    site:'West Yorkshire'},
+  'MONK FRYSTON':       {lat:53.7490,lng:-1.2670,cluster:'Humber',    site:'West Yorkshire'},
+  'BRAMHAM':            {lat:53.8770,lng:-1.3410,cluster:'Humber',    site:'West Yorkshire'},
+  'SKELTON GRANGE':     {lat:53.7760,lng:-1.5040,cluster:'Humber',    site:'Leeds'},
+  'WAKEFIELD':          {lat:53.6780,lng:-1.5050,cluster:'Humber',    site:'West Yorkshire'},
+  // ── Teesside cluster ──────────────────────────────────────────────────────
+  'SEAL SANDS':         {lat:54.6000,lng:-1.1750,cluster:'Teesside',  site:'Seal Sands industrial'},
+  'TEESSIDE':           {lat:54.5990,lng:-1.1720,cluster:'Teesside',  site:'Teesside'},
+  'LACKENBY':           {lat:54.5880,lng:-1.1490,cluster:'Teesside',  site:'Teesside / British Steel'},
+  'HARTLEPOOL':         {lat:54.7000,lng:-1.2550,cluster:'Teesside',  site:'Hartlepool'},
+  'WILTON':             {lat:54.5640,lng:-1.0960,cluster:'Teesside',  site:'Wilton / NEPIC cluster'},
+  'HAWTHORNE PIT':      {lat:54.7590,lng:-1.3140,cluster:'Teesside',  site:'County Durham'},
+  'SPENNYMOOR':         {lat:54.6990,lng:-1.5930,cluster:'Teesside',  site:'County Durham'},
+  'BOLAM':              {lat:55.1040,lng:-1.8600,cluster:'Teesside',  site:'Northumberland'},
+  'ECCLES':             {lat:55.7200,lng:-2.1420,cluster:'Teesside',  site:'Scottish Borders'},
+  // ── North East / Northumberland ───────────────────────────────────────────
+  'BLYTH':              {lat:55.1260,lng:-1.5170,cluster:'Teesside',  site:'Northumberland'},
+  'CAMBOIS':            {lat:55.1440,lng:-1.4990,cluster:'Teesside',  site:'Northumberland coast'},
+  'BEDLINGTON':         {lat:55.1330,lng:-1.5810,cluster:'Teesside',  site:'Northumberland'},
+  'STELLA WEST':        {lat:54.9620,lng:-1.6970,cluster:'Teesside',  site:'Tyne & Wear'},
+  'SOUTH SHIELDS':      {lat:55.0140,lng:-1.4290,cluster:'Teesside',  site:'Tyne & Wear'},
+  // ── North West / Runcorn ──────────────────────────────────────────────────
+  'FRODSHAM':           {lat:53.2960,lng:-2.7280,cluster:'Runcorn',   site:'Runcorn / Merseyside chemicals'},
+  'STANLOW':            {lat:53.2790,lng:-2.8590,cluster:'Runcorn',   site:'Stanlow refinery'},
+  'DEESIDE':            {lat:53.2060,lng:-3.0380,cluster:'Runcorn',   site:'Deeside industrial'},
+  'BREDBURY':           {lat:53.4270,lng:-2.0880,cluster:'Runcorn',   site:'Greater Manchester'},
+  'HEYSHAM':            {lat:54.0280,lng:-2.9160,cluster:'Nuclear',   site:'Heysham nuclear'},
+  'PENWORTHAM':         {lat:53.7510,lng:-2.7040,cluster:'Runcorn',   site:'Lancashire'},
+  'KEARSLEY':           {lat:53.5350,lng:-2.3820,cluster:'Runcorn',   site:'Greater Manchester'},
+  'RAIN HILL':          {lat:53.4270,lng:-2.7590,cluster:'Runcorn',   site:'Merseyside'},
+  'LISTER DRIVE':       {lat:53.4300,lng:-2.9160,cluster:'Runcorn',   site:'Liverpool'},
+  'BRINSWORTH':         {lat:53.4170,lng:-1.3390,cluster:'Humber',    site:'South Yorkshire'},
+  'THORPE MARSH':       {lat:53.5530,lng:-1.0730,cluster:'Humber',    site:'South Yorkshire'},
+  // ── Grangemouth / Scotland ────────────────────────────────────────────────
+  'GRANGEMOUTH':        {lat:56.0020,lng:-3.7150,cluster:'Grangemouth',site:'Grangemouth chemicals'},
+  'LONGANNET':          {lat:56.0530,lng:-3.7130,cluster:'Grangemouth',site:'Firth of Forth'},
+  'MOSSMORRAN':         {lat:56.0990,lng:-3.3250,cluster:'Grangemouth',site:'Shell Mossmorran'},
+  'DUNBAR':             {lat:55.9960,lng:-2.5530,cluster:'Scotland',  site:'East Lothian'},
+  'TORNESS':            {lat:55.9660,lng:-2.4310,cluster:'Nuclear',   site:'Torness nuclear'},
+  'COCKENZIE':          {lat:55.9720,lng:-2.9580,cluster:'Grangemouth',site:'East Lothian'},
+  'LIVINGSTON':         {lat:55.8820,lng:-3.5310,cluster:'Scotland',  site:'West Lothian'},
+  'DENNY/BONNYBRIDGE':  {lat:56.0140,lng:-3.8370,cluster:'Grangemouth',site:'Falkirk'},
+  'ERROCHTY':           {lat:56.6600,lng:-3.9500,cluster:'Scotland',  site:'Perthshire hydro'},
+  'RANNOCH':            {lat:56.6800,lng:-4.3200,cluster:'Scotland',  site:'Perthshire hydro'},
+  'HUNTERSTON':         {lat:55.7170,lng:-4.8820,cluster:'Nuclear',   site:'Hunterston nuclear'},
+  'STRATHAVEN':         {lat:55.6790,lng:-4.0660,cluster:'Scotland',  site:'South Lanarkshire'},
+  'HARKER':             {lat:54.9540,lng:-2.9350,cluster:'Scotland',  site:'Carlisle / Cumbria'},
+  'CHAPELCROSS':        {lat:54.9880,lng:-3.2380,cluster:'Scotland',  site:'Dumfriesshire'},
+  'COALBURN':           {lat:55.5810,lng:-3.8380,cluster:'Scotland',  site:'South Lanarkshire'},
+  'KAIMES':             {lat:55.9090,lng:-3.2340,cluster:'Scotland',  site:'Edinburgh'},
+  'GORGIE':             {lat:55.9330,lng:-3.2280,cluster:'Scotland',  site:'Edinburgh'},
+  'NEILSTON':           {lat:55.7710,lng:-4.4160,cluster:'Scotland',  site:'East Renfrewshire'},
+  'ANDERSON':           {lat:56.3380,lng:-3.2900,cluster:'Scotland',  site:'Perth'},
+  'TEALING':            {lat:56.5360,lng:-2.9570,cluster:'Scotland',  site:'Angus'},
+  'DUNDEE':             {lat:56.4620,lng:-2.9690,cluster:'Scotland',  site:'Dundee'},
+  'PERTH':              {lat:56.3950,lng:-3.4300,cluster:'Scotland',  site:'Perth'},
+  'DALMALLY':           {lat:56.3960,lng:-4.9660,cluster:'Scotland',  site:'Argyll hydro'},
+  'SLOY':               {lat:56.2000,lng:-4.7500,cluster:'Scotland',  site:'Loch Lomond hydro'},
+  'ERSKINE':            {lat:55.9050,lng:-4.4390,cluster:'Scotland',  site:'Renfrewshire'},
+  'WINDYHILL':          {lat:55.9260,lng:-4.3890,cluster:'Scotland',  site:'Glasgow'},
+  'SPANGO VALLEY':      {lat:55.9200,lng:-4.7480,cluster:'Scotland',  site:'Inverclyde'},
+  'INVERARAY':          {lat:56.2290,lng:-5.0680,cluster:'Scotland',  site:'Argyll'},
+  // ── Midlands ──────────────────────────────────────────────────────────────
+  'RATCLIFFE':          {lat:52.8620,lng:-1.2570,cluster:'Midlands',  site:'Nottinghamshire'},
+  'NOTTINGHAM':         {lat:52.9530,lng:-1.1580,cluster:'Midlands',  site:'Nottinghamshire'},
+  'HAMS HALL':          {lat:52.5040,lng:-1.7490,cluster:'Midlands',  site:'West Midlands'},
+  'COVENTRY':           {lat:52.4060,lng:-1.4960,cluster:'Midlands',  site:'West Midlands'},
+  'BUSTLEHOLME':        {lat:52.5310,lng:-2.0040,cluster:'Midlands',  site:'Black Country'},
+  'FECKENHAM':          {lat:52.2800,lng:-1.9810,cluster:'Midlands',  site:'Worcestershire'},
+  'IRONBRIDGE':         {lat:52.6270,lng:-2.4890,cluster:'Midlands',  site:'Shropshire'},
+  'SHREWSBURY':         {lat:52.7090,lng:-2.7510,cluster:'Midlands',  site:'Shropshire'},
+  'RUGELEY':            {lat:52.7520,lng:-1.9460,cluster:'Midlands',  site:'Staffordshire'},
+  'BURNASTON':          {lat:52.8480,lng:-1.5980,cluster:'Midlands',  site:'Derbyshire'},
+  'TOTON':              {lat:52.9000,lng:-1.2860,cluster:'Midlands',  site:'Nottinghamshire'},
+  'THORPE':             {lat:52.9790,lng:-1.0660,cluster:'Midlands',  site:'Nottinghamshire'},
+  'BIRSTALL':           {lat:52.6620,lng:-1.1320,cluster:'Midlands',  site:'Leicestershire'},
+  'GRENDON':            {lat:52.3080,lng:-1.5420,cluster:'Midlands',  site:'Warwickshire'},
+  'WILLENHALL':         {lat:52.5880,lng:-2.0420,cluster:'Midlands',  site:'West Midlands'},
+  'LICKEY HILLS':       {lat:52.3700,lng:-2.0340,cluster:'Midlands',  site:'Worcestershire'},
+  // ── East of England ───────────────────────────────────────────────────────
+  'NORWICH MAIN':       {lat:52.6290,lng: 1.2980,cluster:'East',      site:'Norfolk'},
+  'SIZEWELL':           {lat:52.2140,lng: 1.6200,cluster:'Nuclear',   site:'Sizewell nuclear'},
+  'BRAMFORD':           {lat:52.0840,lng: 1.0840,cluster:'East',      site:'Suffolk'},
+  'PELHAM':             {lat:51.9070,lng: 0.0890,cluster:'East',      site:'Hertfordshire'},
+  'RYE HOUSE':          {lat:51.7680,lng: 0.0010,cluster:'East',      site:'Hertfordshire'},
+  'NORWICH':            {lat:52.6290,lng: 1.2980,cluster:'East',      site:'Norfolk'},
+  'WALPOLE':            {lat:52.7100,lng: 0.2790,cluster:'East',      site:'Norfolk'},
+  'MIDDLE MARHAM':      {lat:52.6530,lng: 0.5460,cluster:'East',      site:'Norfolk'},
+  'PETERBOROUGH':       {lat:52.5680,lng:-0.2120,cluster:'East',      site:'Peterborough'},
+  'BURWELL MAIN':       {lat:52.2740,lng: 0.2940,cluster:'East',      site:'Cambridgeshire'},
+  'ELSTREE':            {lat:51.6570,lng:-0.3010,cluster:'South',     site:'Hertfordshire'},
+  'ST JOHN'S WOOD':    {lat:51.5290,lng:-0.1730,cluster:'South',     site:'London'},
+  'KENSAL GREEN':       {lat:51.5280,lng:-0.2230,cluster:'South',     site:'London'},
+  'BARKING':            {lat:51.5310,lng: 0.0890,cluster:'Thames',    site:'East London'},
+  'HACKNEY':            {lat:51.5460,lng:-0.0630,cluster:'Thames',    site:'London'},
+  'LEA VALLEY':         {lat:51.6010,lng:-0.0350,cluster:'Thames',    site:'London'},
+  'BRIMSDOWN':          {lat:51.6370,lng:-0.0350,cluster:'Thames',    site:'Enfield'},
+  'BEDDINGTON':         {lat:51.3730,lng:-0.1540,cluster:'South',     site:'Surrey'},
+  'NEW CROSS':          {lat:51.4730,lng:-0.0370,cluster:'Thames',    site:'South London'},
+  'HURST':              {lat:51.4250,lng:-0.6900,cluster:'South',     site:'Surrey'},
+  'KEMSLEY':            {lat:51.3620,lng: 0.7290,cluster:'Thames',    site:'Kent'},
+  'RICHBOROUGH':        {lat:51.3200,lng: 1.3400,cluster:'Thames',    site:'Kent'},
+  'GRAIN':              {lat:51.4430,lng: 0.7200,cluster:'Thames',    site:'Isle of Grain'},
+  'KINGSNORTH':         {lat:51.3860,lng: 0.6280,cluster:'Thames',    site:'Medway'},
+  'DUNGENESS':          {lat:50.9150,lng: 0.9590,cluster:'Nuclear',   site:'Dungeness nuclear'},
+  'BOLNEY':             {lat:50.9730,lng:-0.2250,cluster:'South',     site:'West Sussex'},
+  'NINFIELD':           {lat:50.8680,lng: 0.4200,cluster:'South',     site:'East Sussex'},
+  'MANNINGTON':         {lat:50.8350,lng:-1.9980,cluster:'South',     site:'Dorset'},
+  'FAWLEY':             {lat:50.8310,lng:-1.3310,cluster:'South',     site:'Southampton / Fawley'},
+  'LOVEDEAN':           {lat:50.9190,lng:-1.0380,cluster:'South',     site:'Hampshire'},
+  'NURSLING':           {lat:50.9500,lng:-1.4040,cluster:'South',     site:'Hampshire'},
+  'TRURO':              {lat:50.2630,lng:-5.0510,cluster:'South',     site:'Cornwall'},
+  'INDIAN QUEENS':      {lat:50.3820,lng:-4.9690,cluster:'South',     site:'Cornwall'},
+  'LANGAGE':            {lat:50.3760,lng:-3.9970,cluster:'South',     site:'Devon'},
+  'MELKSHAM':           {lat:51.3760,lng:-2.1380,cluster:'South',     site:'Wiltshire'},
+  'BRAMLEY':            {lat:51.3440,lng:-1.0700,cluster:'South',     site:'Hampshire'},
+  'SUPERGRID':          {lat:51.8040,lng:-1.2610,cluster:'South',     site:'Oxfordshire'},
+  'COWLEY':             {lat:51.7240,lng:-1.2020,cluster:'South',     site:'Oxford'},
+  'NECHELLS':           {lat:52.4890,lng:-1.8820,cluster:'Midlands',  site:'Birmingham'},
+  // ── Wales ─────────────────────────────────────────────────────────────────
+  'PEMBROKE':           {lat:51.6750,lng:-4.9440,cluster:'Wales',     site:'Pembrokeshire'},
+  'SWANSEA NORTH':      {lat:51.6500,lng:-3.9380,cluster:'Wales',     site:'Swansea'},
+  'CILFYNYDD':          {lat:51.5980,lng:-3.3760,cluster:'Wales',     site:'South Wales'},
+  'TREMORFA':           {lat:51.4810,lng:-3.1520,cluster:'Wales',     site:'Cardiff'},
+  'ABERTHAW':           {lat:51.3860,lng:-3.3970,cluster:'Wales',     site:'Vale of Glamorgan'},
+  'LLANDARCY':          {lat:51.6380,lng:-3.8450,cluster:'Wales',     site:'South Wales'},
+  'RASSAU':             {lat:51.8080,lng:-3.2240,cluster:'Wales',     site:'Blaenau Gwent'},
+  'RHIGOS':             {lat:51.7720,lng:-3.5530,cluster:'Wales',     site:'Rhondda'},
+  'WALHAM':             {lat:51.8810,lng:-2.2240,cluster:'Wales',     site:'Gloucestershire'},
+  'TIRLEY':             {lat:51.9700,lng:-2.1730,cluster:'Wales',     site:'Gloucestershire'},
+  'NORTH HOYLE':        {lat:53.3850,lng:-3.4260,cluster:'Offshore',  site:'North Wales offshore wind'},
+  'PENTIR':             {lat:53.1940,lng:-4.1640,cluster:'Wales',     site:'Gwynedd'},
+  'WYLFA':              {lat:53.4150,lng:-4.4680,cluster:'Nuclear',   site:'Wylfa nuclear'},
+  // ── Hinkley Point / Somerset ──────────────────────────────────────────────
+  'HINKLEY POINT':      {lat:51.2090,lng:-3.1310,cluster:'Nuclear',   site:'Hinkley Point nuclear'},
+  'HINKLEY':            {lat:51.2090,lng:-3.1310,cluster:'Nuclear',   site:'Hinkley Point nuclear'},
+  'BRIDGWATER':         {lat:51.1270,lng:-2.9970,cluster:'Nuclear',   site:'Somerset'},
+  // ── Scottish Highlands ────────────────────────────────────────────────────
+  'BLACKHILLOCK':       {lat:57.4450,lng:-2.9390,cluster:'Scotland',  site:'Moray / Grampian'},
+  'PETERHEAD':          {lat:57.5110,lng:-1.7790,cluster:'Scotland',  site:'Aberdeenshire'},
+  'NAIRN':              {lat:57.5910,lng:-3.8660,cluster:'Scotland',  site:'Highland'},
+  'BEAUTY':             {lat:57.4560,lng:-4.4060,cluster:'Scotland',  site:'Highland'},
+  'INVERNESS':          {lat:57.4800,lng:-4.2230,cluster:'Scotland',  site:'Highland'},
+  'LOCH BAY':           {lat:57.3960,lng:-6.3140,cluster:'Scotland',  site:'Isle of Skye'},
+  'STORNOWAY':          {lat:58.2090,lng:-6.3860,cluster:'Scotland',  site:'Outer Hebrides'},
+  'DOUNREAY':           {lat:58.5860,lng:-3.7430,cluster:'Nuclear',   site:'Caithness'},
+  'DUNBEATH':           {lat:58.2600,lng:-3.4270,cluster:'Scotland',  site:'Caithness'},
+  'LAIRG':              {lat:58.0150,lng:-4.4120,cluster:'Scotland',  site:'Sutherland'},
+  'BRORA':              {lat:58.0100,lng:-3.8470,cluster:'Scotland',  site:'Sutherland'},
+  'CASSLEY':            {lat:57.9680,lng:-4.7480,cluster:'Scotland',  site:'Sutherland hydro'},
+  'SHIN':               {lat:57.9350,lng:-4.4420,cluster:'Scotland',  site:'Sutherland hydro'},
+  'GRUDIE BRIDGE':      {lat:57.6380,lng:-4.6910,cluster:'Scotland',  site:'Ross-shire hydro'},
+  'MOSSFORD':           {lat:57.6360,lng:-4.9980,cluster:'Scotland',  site:'Ross-shire'},
+  'GLEN MORRISON':      {lat:57.1990,lng:-4.7440,cluster:'Scotland',  site:'Highland hydro'},
+  'KILMORACK':          {lat:57.3790,lng:-4.5530,cluster:'Scotland',  site:'Highland hydro'},
+  'FOYERS':             {lat:57.2430,lng:-4.4780,cluster:'Scotland',  site:'Loch Ness hydro'},
+  'DENNY':              {lat:56.0140,lng:-3.8370,cluster:'Grangemouth',site:'Falkirk'},
+};
+
+function matchGSP(raw) {
+  if (!raw) return null;
+  const s = raw.toUpperCase().trim();
+  if (TEC_GSP_COORDS[s]) return { key:s, ...TEC_GSP_COORDS[s] };
+  let best = null, bestLen = 0;
+  const firstWord = s.split(/\s/)[0];
+  for (const [key, val] of Object.entries(TEC_GSP_COORDS)) {
+    if ((s.includes(key) || key.includes(firstWord) || s.startsWith(key.split(' ')[0])) && key.length > bestLen) {
+      best = { key, ...val }; bestLen = key.length;
+    }
+  }
+  return best;
+}
 
 function tecDot(color, mw) {
   // Size by MW — bigger dot for larger contracted capacity
@@ -1809,31 +2027,137 @@ async function loadTEC() {
   if (tecLoaded) { renderTECLayer(); return; }
   const panelContent = document.getElementById('tec-panel-content');
   if (panelContent) panelContent.innerHTML = '<span style="color:#94a3b8">Fetching from NESO…</span>';
+
+  // Call NESO CKAN API directly from browser — bypasses robots.txt block on Vercel
+  // CKAN supports CORS so this works client-side
+  const RESOURCE_ID = '17becbab-e3e8-473f-b303-3806f43a6a10';
+  const PAGE_SIZE = 5000;
+  let allRecords = [];
+
   try {
-    const controller = new AbortController();
-    const tid = setTimeout(() => controller.abort(), 28000);
-    const r = await fetch('/api/tec', { signal: controller.signal });
-    clearTimeout(tid);
-    const gj = await r.json().catch(() => ({ error: 'Non-JSON response from /api/tec' }));
-    if (!r.ok || gj.error) {
-      const tried = Array.isArray(gj.methods_tried)
-        ? '<div style="margin-top:.35rem;font-size:.62rem;color:#94a3b8;line-height:1.5">'
-          + gj.methods_tried.map(m => '• ' + m).join('<br>')
-          + '</div>'
-        : '';
-      const hint = gj.hint ? '<div style="margin-top:.3rem;font-size:.62rem;color:#0891b2">' + gj.hint + '</div>' : '';
-      if (panelContent) panelContent.innerHTML =
-        '<span style="color:#ef4444;font-weight:500">' + (gj.error || 'TEC API error ' + r.status) + '</span>'
-        + tried + hint;
-      return;
+    // Fetch in pages if needed — get total first
+    const firstUrl = `https://api.neso.energy/api/3/action/datastore_search?resource_id=${RESOURCE_ID}&limit=${PAGE_SIZE}&offset=0`;
+    const firstR = await fetch(firstUrl, { signal: AbortSignal.timeout(20000) });
+    if (!firstR.ok) throw new Error(`NESO API ${firstR.status}`);
+    const firstJson = await firstR.json();
+    if (!firstJson.success) throw new Error('NESO API returned success=false');
+
+    allRecords = firstJson.result?.records || [];
+    const total = firstJson.result?.total || allRecords.length;
+
+    // Fetch remaining pages if needed
+    if (total > PAGE_SIZE) {
+      const pages = Math.ceil((total - PAGE_SIZE) / PAGE_SIZE);
+      const fetches = [];
+      for (let i = 1; i <= pages; i++) {
+        fetches.push(
+          fetch(`https://api.neso.energy/api/3/action/datastore_search?resource_id=${RESOURCE_ID}&limit=${PAGE_SIZE}&offset=${i * PAGE_SIZE}`, { signal: AbortSignal.timeout(20000) })
+            .then(r => r.json())
+            .then(j => j.result?.records || [])
+            .catch(() => [])
+        );
+      }
+      const pages_data = await Promise.all(fetches);
+      pages_data.forEach(p => allRecords.push(...p));
     }
+
+    if (!allRecords.length) throw new Error('No TEC records returned');
+
+    // Build GeoJSON from records
+    const gj = processTECRecords(allRecords, total);
     tecData = gj;
     tecLoaded = true;
     renderTECLayer();
     renderTECPanel(gj.meta);
+
   } catch(e) {
-    if (panelContent) panelContent.innerHTML = '<span style="color:#ef4444">Error: ' + e.message + '</span>';
+    if (panelContent) panelContent.innerHTML =
+      `<span style="color:#ef4444;font-weight:500">Error: ${e.message}</span>
+       <div style="margin-top:.35rem;font-size:.62rem;color:#94a3b8">
+         The NESO API may be temporarily unavailable. Try again in a few minutes, or
+         <a href="https://api.neso.energy/api/3/action/datastore_search?resource_id=17becbab-e3e8-473f-b303-3806f43a6a10&limit=5" 
+            target="_blank" style="color:#0891b2">test the API directly →</a>
+       </div>`;
   }
+}
+
+function processTECRecords(records, total) {
+  if (!records.length) return { type:'FeatureCollection', features:[], meta:{} };
+  const keys = Object.keys(records[0]);
+  const find = (...c) => {
+    for (const s of c) {
+      const k = keys.find(k => k.toLowerCase().replace(/[^a-z0-9]/g,'').includes(s.toLowerCase().replace(/[^a-z0-9]/g,'')));
+      if (k) return k;
+    }
+    return null;
+  };
+  const F = {
+    id:      find('projectno','projectid') || keys[0],
+    company: find('companyname','company') || keys[1],
+    tech:    find('technology','tech') || keys[2],
+    tec:     find('tec','capacity','mw') || keys[3],
+    gsp:     find('gsp','gridsupplypoint','substation') || keys[4],
+    stage:   find('stage'),
+    gate:    find('gate'),
+    energy:  find('energisation','date','year'),
+    status:  find('status'),
+  };
+  const get = (r, k) => String(r[F[k]] ?? '').trim();
+
+  const features = [];
+  const unmapped = {};
+  let mappedMW = 0, unmappedMW = 0;
+
+  for (const rec of records) {
+    const gspRaw = get(rec, 'gsp');
+    const matched = matchGSP(gspRaw);
+    if (!matched) unmapped[gspRaw || 'BLANK'] = (unmapped[gspRaw || 'BLANK'] || 0) + 1;
+    const mw = parseFloat(get(rec, 'tec')) || 0;
+    if (matched) mappedMW += mw; else unmappedMW += mw;
+
+    features.push({
+      type: 'Feature',
+      geometry: matched ? { type:'Point', coordinates:[matched.lng, matched.lat] } : null,
+      properties: {
+        project_id:    get(rec,'id'),
+        company:       get(rec,'company'),
+        technology:    normaliseTechTEC(get(rec,'tech')),
+        technology_raw: get(rec,'tech'),
+        tec_mw:        mw,
+        gsp:           gspRaw,
+        gsp_matched:   matched?.key || null,
+        cluster:       matched?.cluster || null,
+        site_context:  matched?.site || null,
+        stage:         get(rec,'stage'),
+        gate:          get(rec,'gate'),
+        energisation:  get(rec,'energy'),
+        status:        get(rec,'status'),
+        has_coords:    !!matched,
+      }
+    });
+  }
+
+  const techCounts = {}, clusterMW = {};
+  features.forEach(f => {
+    const p = f.properties;
+    techCounts[p.technology] = (techCounts[p.technology]||0) + 1;
+    if (p.cluster) clusterMW[p.cluster] = (clusterMW[p.cluster]||0) + (p.tec_mw||0);
+  });
+
+  return {
+    type: 'FeatureCollection',
+    features,
+    meta: {
+      total_features: features.length,
+      total_neso: total,
+      mapped_to_coords: features.filter(f=>f.properties.has_coords).length,
+      mapped_mw: Math.round(mappedMW),
+      unmapped_mw: Math.round(unmappedMW),
+      tech_counts: techCounts,
+      cluster_mw: clusterMW,
+      top_unmapped: Object.entries(unmapped).sort((a,b)=>b[1]-a[1]).slice(0,10).map(([gsp,n])=>({gsp,n})),
+    }
+  };
 }
 
 function renderTECLayer() {
