@@ -677,9 +677,9 @@ nav::-webkit-scrollbar{display:none}
     </div>
 
     <!-- Detail panel (slides up on marker click) -->
-    <div id="repd-detail" style="display:none;position:absolute;bottom:0;left:0;right:0;z-index:500;background:var(--bg1);border-top:1px solid var(--b1);padding:.75rem 1rem;max-height:45%">
+    <div id="repd-detail" style="display:none;position:absolute;bottom:0;left:0;right:0;z-index:500;background:#ffffff;border-top:2px solid #e2e8f0;padding:.85rem 1.1rem;max-height:45%;overflow-y:auto;box-shadow:0 -4px 16px rgba(0,0,0,.12)">
       <div id="repd-detail-content"></div>
-      <button onclick="document.getElementById('repd-detail').style.display='none'" style="position:absolute;top:.5rem;right:.75rem;background:none;border:none;font-size:1.1rem;cursor:pointer;color:var(--mid)">✕</button>
+      <button onclick="document.getElementById('repd-detail').style.display='none'" style="position:absolute;top:.5rem;right:.75rem;background:none;border:none;font-size:1.1rem;cursor:pointer;color:#64748b">✕</button>
     </div>
 
   </div>
@@ -1949,7 +1949,7 @@ function showRepdDetail(p) {
   document.getElementById('repd-detail-content').innerHTML = `
     <div style="display:flex;flex-wrap:wrap;gap:.75rem;align-items:flex-start">
       <div style="flex:1;min-width:200px">
-        <div style="font-size:.85rem;font-weight:500;color:var(--navy);margin-bottom:.25rem">${p.name}</div>
+        <div style="font-size:.85rem;font-weight:500;color:#1e293b;margin-bottom:.25rem">${p.name}</div>
         <div style="display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:.5rem">
           <span style="font-size:.65rem;font-weight:700;padding:2px 7px;border-radius:3px;background:${tc}22;color:${tc}">${p.tech}</span>
           <span style="font-size:.65rem;font-weight:700;padding:2px 7px;border-radius:3px;background:${sc}22;color:${sc}">${p.status}</span>
@@ -1957,18 +1957,18 @@ function showRepdDetail(p) {
         </div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.5rem;font-size:.72rem">
-        <div><div style="color:var(--mid);font-size:.6rem;text-transform:uppercase;letter-spacing:.06em">Capacity</div>
-          <div style="font-family:var(--mono);font-weight:500;color:var(--navy)">${p.capacity_mw ? p.capacity_mw.toLocaleString()+' MW' : '—'}</div></div>
-        <div><div style="color:var(--mid);font-size:.6rem;text-transform:uppercase;letter-spacing:.06em">Operator</div>
-          <div style="color:var(--navy)">${p.operator || '—'}</div></div>
-        <div><div style="color:var(--mid);font-size:.6rem;text-transform:uppercase;letter-spacing:.06em">Region</div>
-          <div style="color:var(--navy)">${p.county ? p.county+', ' : ''}${p.country || ''}</div></div>
-        <div><div style="color:var(--mid);font-size:.6rem;text-transform:uppercase;letter-spacing:.06em">Planning ref</div>
-          <div style="font-family:var(--mono);font-size:.65rem;color:var(--mid)">${p.plan_ref || '—'}</div></div>
-        <div><div style="color:var(--mid);font-size:.6rem;text-transform:uppercase;letter-spacing:.06em">Date granted</div>
-          <div style="color:var(--navy)">${p.date_granted || '—'}</div></div>
-        <div><div style="color:var(--mid);font-size:.6rem;text-transform:uppercase;letter-spacing:.06em">Operational</div>
-          <div style="color:var(--navy)">${p.date_operational || '—'}</div></div>
+        <div><div style="color:#64748b;font-size:.6rem;text-transform:uppercase;letter-spacing:.06em">Capacity</div>
+          <div style="font-family:var(--mono);font-weight:500;color:#1e293b">${p.capacity_mw ? p.capacity_mw.toLocaleString()+' MW' : '—'}</div></div>
+        <div><div style="color:#64748b;font-size:.6rem;text-transform:uppercase;letter-spacing:.06em">Operator</div>
+          <div style="color:#1e293b">${p.operator || '—'}</div></div>
+        <div><div style="color:#64748b;font-size:.6rem;text-transform:uppercase;letter-spacing:.06em">Region</div>
+          <div style="color:#1e293b">${p.county ? p.county+', ' : ''}${p.country || ''}</div></div>
+        <div><div style="color:#64748b;font-size:.6rem;text-transform:uppercase;letter-spacing:.06em">Planning ref</div>
+          <div style="font-family:var(--mono);font-size:.65rem;color:#475569">${p.plan_ref || '—'}</div></div>
+        <div><div style="color:#64748b;font-size:.6rem;text-transform:uppercase;letter-spacing:.06em">Date granted</div>
+          <div style="color:#1e293b">${p.date_granted || '—'}</div></div>
+        <div><div style="color:#64748b;font-size:.6rem;text-transform:uppercase;letter-spacing:.06em">Operational</div>
+          <div style="color:#1e293b">${p.date_operational || '—'}</div></div>
       </div>
     </div>`;
   detail.style.display = 'block';
