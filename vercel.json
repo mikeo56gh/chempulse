@@ -1,1 +1,28 @@
-
+{
+  "functions": {
+    "api/grid.js": {
+      "maxDuration": 30
+    },
+    "api/ccgt.js": {
+      "maxDuration": 30
+    },
+    "api/planning.js": {
+      "maxDuration": 30
+    },
+    "api/news.js": {
+      "maxDuration": 30
+    },
+    "api/rivers.js": {
+      "maxDuration": 20
+    },
+    "api/energy.js": {
+      "maxDuration": 20
+    },
+    "api/sites.js": {
+      "maxDuration": 10
+    },
+    "api/query.js": {
+      "maxDuration": 30
+    }
+  }
+}
