@@ -26,6 +26,9 @@
     },
     "api/repd.js": {
       "maxDuration": 30
+    },
+    "api/tec.js": {
+      "maxDuration": 30
     }
   }
 }
