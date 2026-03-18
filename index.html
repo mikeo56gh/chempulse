@@ -703,7 +703,7 @@ async function loadNewsFallback(){
   const el=document.getElementById('news-list');
   el.innerHTML='<div class="loading-ph"><span class="sp"></span>Generating AI-curated news brief…</div>';
   try{
-    const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,system:'Return ONLY valid JSON array, no markdown.',messages:[{role:'user',content:'Generate 10 realistic current UK/EU chemical industry news items from HSE, ECHA, Environment Agency, Reuters. Include 2 about Hull/Humber cluster. JSON: [{title,desc,link,date,src,tag}] tag=safety|regulatory|environment|energy|ops'}]})});
+    const r=await fetch('/api/query',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,system:'Return ONLY valid JSON array, no markdown.',messages:[{role:'user',content:'Generate 10 realistic current UK/EU chemical industry news items from HSE, ECHA, Environment Agency, Reuters. Include 2 about Hull/Humber cluster. JSON: [{title,desc,link,date,src,tag}] tag=safety|regulatory|environment|energy|ops'}]})});
     const d=await r.json();
     let t=d.content?.map(c=>c.text||'').join('')||'[]';
     allNews=JSON.parse(t.replace(/```json|```/g,'').trim());
@@ -781,7 +781,7 @@ async function loadPlanFallback(){
   const el=document.getElementById('planning-list');
   el.innerHTML='<div class="loading-ph"><span class="sp"></span>Generating Humber energy planning intelligence…</div>';
   try{
-    const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,system:'Return ONLY valid JSON array.',messages:[{role:'user',content:'Generate 10 realistic 2024-2025 planning applications for Hull City Council and East Riding of Yorkshire on energy/industrial keywords: solar, BESS, wind, hydrogen, chemical. Base around Humber Estuary, Saltend, South Humber Bank. Reference real projects: H2H Saltend, Humber Zero, Viking CCS, Orsted. JSON: [{title,desc,address,date,status,keyword,council,link}] status=Pending|Approved|Refused'}]})});
+    const r=await fetch('/api/query',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,system:'Return ONLY valid JSON array.',messages:[{role:'user',content:'Generate 10 realistic 2024-2025 planning applications for Hull City Council and East Riding of Yorkshire on energy/industrial keywords: solar, BESS, wind, hydrogen, chemical. Base around Humber Estuary, Saltend, South Humber Bank. Reference real projects: H2H Saltend, Humber Zero, Viking CCS, Orsted. JSON: [{title,desc,address,date,status,keyword,council,link}] status=Pending|Approved|Refused'}]})});
     const d=await r.json();
     let t=d.content?.map(c=>c.text||'').join('')||'[]';
     allPlan=JSON.parse(t.replace(/```json|```/g,'').trim());
@@ -811,7 +811,7 @@ async function loadReg(){
   if(items.length){renderReg(items);return;}
   // AI fallback
   try{
-    const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,system:'Return ONLY valid JSON array.',messages:[{role:'user',content:'Generate 9 current UK/EU chemical regulatory updates on REACH, COMAH, HSE, ECHA, IED, CBAM, CLP. JSON: [{title,body,authority,date,urgency,link}] urgency=high|medium|low'}]})});
+    const r=await fetch('/api/query',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,system:'Return ONLY valid JSON array.',messages:[{role:'user',content:'Generate 9 current UK/EU chemical regulatory updates on REACH, COMAH, HSE, ECHA, IED, CBAM, CLP. JSON: [{title,body,authority,date,urgency,link}] urgency=high|medium|low'}]})});
     const d=await r.json();let t=d.content?.map(c=>c.text||'').join('')||'[]';
     items=JSON.parse(t.replace(/```json|```/g,'').trim());renderReg(items);
   }catch(e){el.innerHTML='<div class="loading-ph" style="color:var(--red)">Error loading regulatory data.</div>';}
@@ -836,7 +836,7 @@ async function ask(inId,outId){
   resp.style.maxHeight=outId==='ir'?'none':'180px';
   resp.innerHTML='<span class="sp"></span>Generating…';
   try{
-    const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,system:SYS,messages:[{role:'user',content:q}]})});
+    const r=await fetch('/api/query',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,system:SYS,messages:[{role:'user',content:q}]})});
     const d=await r.json();
     resp.textContent=d.content?.map(c=>c.text||'').join('')||'No response.';
   }catch(e){resp.textContent='Error: '+e.message;}
