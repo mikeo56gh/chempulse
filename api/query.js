@@ -1,3 +1,6 @@
+// api/query.js
+// Secure proxy for Claude API — keeps API key server-side
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
