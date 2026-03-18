@@ -23,6 +23,9 @@
     },
     "api/query.js": {
       "maxDuration": 30
+    },
+    "api/repd.js": {
+      "maxDuration": 30
     }
   }
 }
