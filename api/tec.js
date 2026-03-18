@@ -1,77 +1,36 @@
-// api/tec.js — NESO TEC Register via CSV download (no CORS issues)
-// The CKAN datapackage_show endpoint reveals the current CSV filename
-// CSV is then fetched, parsed, and returned as structured JSON
-// Free, no key, Open Data Licence — api.neso.energy
-// Updated by NESO twice weekly (Tue/Fri)
+// api/tec.js — NESO TEC Register
+// NESO updates this every Tue/Fri. The filename encodes the date.
+// We generate candidate URLs for the last 6 weeks and try them in parallel.
+// api.neso.energy blocks robots but the CSV downloads work from server-side fetch.
 
 export const config = { maxDuration: 30 };
 
-const DATASET_ID   = 'cbd45e54-e6e2-4a38-99f1-8de6fd96d7c1';
-const RESOURCE_ID  = '17becbab-e3e8-473f-b303-3806f43a6a10';
-const BASE         = 'https://api.neso.energy';
+const BASE        = 'https://api.neso.energy';
+const DATASET_ID  = 'cbd45e54-e6e2-4a38-99f1-8de6fd96d7c1';
+const RESOURCE_ID = '17becbab-e3e8-473f-b303-3806f43a6a10';
 
-// Cluster assignment by GSP keyword
-const GSP_CLUSTER = {
-  // Humber
-  SALTEND:'Humber', 'SOUTH HUMBER':'Humber', KILLINGHOLME:'Humber',
-  KEADBY:'Humber', GRIMSBY:'Humber', 'BICKER FEN':'Humber',
-  DRAX:'Humber', EGGBOROUGH:'Humber', FERRYBRIDGE:'Humber',
-  'WEST BURTON':'Humber', 'CREYKE BECK':'Humber',
-  // Teesside
-  'SEAL SANDS':'Teesside', TEESSIDE:'Teesside', LACKENBY:'Teesside',
-  HARTLEPOOL:'Teesside', WILTON:'Teesside', NUNTHORPE:'Teesside',
-  BLYTH:'Teesside', CAMBOIS:'Teesside',
-  // Grangemouth / Scotland central
-  GRANGEMOUTH:'Grangemouth', LONGANNET:'Grangemouth', MOSSMORRAN:'Grangemouth',
-  DENNY:'Grangemouth', 'BONNYBRIDGE':'Grangemouth',
-  // Runcorn / North West
-  FRODSHAM:'Runcorn', STANLOW:'Runcorn', DEESIDE:'Runcorn',
-  BREDBURY:'Runcorn', PENWORTHAM:'Runcorn', KEARSLEY:'Runcorn',
-  'RAIN HILL':'Runcorn', 'LISTER DRIVE':'Runcorn',
-  // Nuclear
-  HEYSHAM:'Nuclear', SIZEWELL:'Nuclear', HINKLEY:'Nuclear',
-  DUNGENESS:'Nuclear', TORNESS:'Nuclear', HUNTERSTON:'Nuclear',
-  WYLFA:'Nuclear', DOUNREAY:'Nuclear',
-  // Scotland
-  PETERHEAD:'Scotland', BLACKHILLOCK:'Scotland', NAIRN:'Scotland',
-  INVERNESS:'Scotland', BEAUTY:'Scotland', HARKER:'Scotland',
-  CHAPELCROSS:'Scotland', COALBURN:'Scotland', KAIMES:'Scotland',
-  GORGIE:'Scotland', ANDERSON:'Scotland', TEALING:'Scotland',
-  DUNDEE:'Scotland', PERTH:'Scotland', DUNBAR:'Scotland',
-};
+// Generate candidate CSV filenames for the last N weeks
+// NESO names them: tec-register-DD-monthname-YYYY.csv
+function candidateUrls(weeksBack = 8) {
+  const months = ['january','february','march','april','may','june',
+                  'july','august','september','october','november','december'];
+  const urls = [];
+  const now = new Date();
 
-function getCluster(gsp) {
-  if (!gsp) return 'Other';
-  const u = gsp.toUpperCase();
-  for (const [key, cluster] of Object.entries(GSP_CLUSTER)) {
-    if (u.includes(key)) return cluster;
+  for (let d = 0; d < weeksBack * 7; d++) {
+    const date = new Date(now);
+    date.setDate(date.getDate() - d);
+    const day   = date.getDate();
+    const month = months[date.getMonth()];
+    const year  = date.getFullYear();
+    const dd    = String(day).padStart(2, '0');
+    // Both padded and unpadded variants
+    for (const dayStr of [dd, String(day)]) {
+      urls.push(`${BASE}/dataset/${DATASET_ID}/resource/${RESOURCE_ID}/download/tec-register-${dayStr}-${month}-${year}.csv`);
+    }
   }
-  // Regional fallbacks
-  if (/YORK|LEEDS|BRADFORD|HULL|LINCOLN|NOTTING|DERBY|SHEFFIELD|BARNSLEY/.test(u)) return 'Yorkshire';
-  if (/EDINBURGH|GLASGOW|STIRLING|FIFE|ANGUS|ABERDEEN|HIGHLAND|ARGYLL/.test(u)) return 'Scotland';
-  if (/WALES|CARDIFF|SWANSEA|NEWPORT|PEMBROKE|ABERYSTWYTH/.test(u)) return 'Wales';
-  if (/LONDON|KENT|SURREY|ESSEX|SUFFOLK|NORFOLK|CAMBS|BEDS|HERTS/.test(u)) return 'South East';
-  if (/DEVON|CORNWALL|DORSET|SOMERSET|WILTS|HANTS|BRISTOL/.test(u)) return 'South West';
-  if (/MIDLAND|BIRMINGHAM|COVENTRY|STAFFORD|WORCESTER|LEICS|NORTHANTS/.test(u)) return 'Midlands';
-  if (/MANCHESTER|LIVERPOOL|LANCASHIRE|CHESHIRE|CUMBRIA/.test(u)) return 'North West';
-  return 'Other';
-}
-
-function normTech(raw) {
-  const t = (raw || '').toLowerCase();
-  if (t.includes('offshore')) return 'Offshore Wind';
-  if (t.includes('wind'))     return 'Onshore Wind';
-  if (t.includes('solar'))    return 'Solar';
-  if (t.includes('battery') || t.includes('storage')) return 'Battery Storage';
-  if (t.includes('hydrogen')) return 'Hydrogen';
-  if (t.includes('nuclear'))  return 'Nuclear';
-  if (t.includes('gas') || t.includes('ccgt') || t.includes('ocgt')) return 'Gas';
-  if (t.includes('biomass'))  return 'Biomass';
-  if (t.includes('interconnect')) return 'Interconnector';
-  if (t.includes('hydro'))    return 'Hydro';
-  if (t.includes('tidal') || t.includes('wave')) return 'Marine';
-  if (t.includes('ccs') || t.includes('ccus') || t.includes('carbon capture')) return 'CCS/CCUS';
-  return raw || 'Other';
+  // Deduplicate while preserving order
+  return [...new Set(urls)];
 }
 
 function parseCSV(text) {
@@ -92,12 +51,67 @@ function parseCSV(text) {
   return rows;
 }
 
-async function get(url, timeout = 15000) {
+const CLUSTER_MAP = {
+  SALTEND:'Humber','SOUTH HUMBER':'Humber',KILLINGHOLME:'Humber',KEADBY:'Humber',
+  GRIMSBY:'Humber','BICKER FEN':'Humber',DRAX:'Humber',EGGBOROUGH:'Humber',
+  FERRYBRIDGE:'Humber','WEST BURTON':'Humber','CREYKE BECK':'Humber',
+  'SEAL SANDS':'Teesside',TEESSIDE:'Teesside',LACKENBY:'Teesside',
+  HARTLEPOOL:'Teesside',WILTON:'Teesside',BLYTH:'Teesside',CAMBOIS:'Teesside',
+  GRANGEMOUTH:'Grangemouth',LONGANNET:'Grangemouth',MOSSMORRAN:'Grangemouth',
+  DENNY:'Grangemouth',
+  FRODSHAM:'Runcorn',STANLOW:'Runcorn',DEESIDE:'Runcorn',BREDBURY:'Runcorn',
+  PENWORTHAM:'Runcorn',KEARSLEY:'Runcorn',
+  HEYSHAM:'Nuclear',SIZEWELL:'Nuclear',HINKLEY:'Nuclear',
+  DUNGENESS:'Nuclear',TORNESS:'Nuclear',HUNTERSTON:'Nuclear',WYLFA:'Nuclear',
+  PETERHEAD:'Scotland',BLACKHILLOCK:'Scotland',NAIRN:'Scotland',
+  INVERNESS:'Scotland',HARKER:'Scotland',CHAPELCROSS:'Scotland',COALBURN:'Scotland',
+};
+
+function getCluster(gsp) {
+  if (!gsp) return 'Other';
+  const u = gsp.toUpperCase();
+  for (const [k, v] of Object.entries(CLUSTER_MAP)) if (u.includes(k)) return v;
+  if (/YORK|LEEDS|BRADFORD|HULL|LINCOLN|NOTTING|DERBY|SHEFFIELD/.test(u)) return 'Yorkshire';
+  if (/EDINBURGH|GLASGOW|STIRLING|FIFE|ANGUS|ABERDEEN|HIGHLAND|ARGYLL|DUNBAR/.test(u)) return 'Scotland';
+  if (/WALES|CARDIFF|SWANSEA|NEWPORT|PEMBROKE/.test(u)) return 'Wales';
+  if (/LONDON|KENT|SURREY|ESSEX|SUFFOLK|NORFOLK|CAMBS/.test(u)) return 'South East';
+  if (/DEVON|CORNWALL|DORSET|SOMERSET|WILTS|HANTS|BRISTOL/.test(u)) return 'South West';
+  if (/MIDLAND|BIRMINGHAM|COVENTRY|STAFFORD|WORCESTER|LEICS/.test(u)) return 'Midlands';
+  if (/MANCHESTER|LIVERPOOL|LANCASHIRE|CHESHIRE|CUMBRIA/.test(u)) return 'North West';
+  return 'Other';
+}
+
+function normTech(raw) {
+  const t = (raw||'').toLowerCase();
+  if (t.includes('offshore')) return 'Offshore Wind';
+  if (t.includes('wind'))     return 'Onshore Wind';
+  if (t.includes('solar'))    return 'Solar';
+  if (t.includes('battery')||t.includes('storage')) return 'Battery Storage';
+  if (t.includes('hydrogen')) return 'Hydrogen';
+  if (t.includes('nuclear'))  return 'Nuclear';
+  if (t.includes('gas')||t.includes('ccgt')||t.includes('ocgt')) return 'Gas';
+  if (t.includes('biomass'))  return 'Biomass';
+  if (t.includes('interconnect')) return 'Interconnector';
+  if (t.includes('hydro'))    return 'Hydro';
+  if (t.includes('tidal')||t.includes('wave')) return 'Marine';
+  if (t.includes('ccs')||t.includes('ccus')||t.includes('carbon capture')) return 'CCS/CCUS';
+  return raw||'Other';
+}
+
+async function tryFetch(url, ms = 12000) {
   const ctrl = new AbortController();
-  const tid = setTimeout(() => ctrl.abort(), timeout);
-  const r = await fetch(url, { headers: { Accept: '*/*' }, signal: ctrl.signal });
-  clearTimeout(tid);
-  return r;
+  const tid  = setTimeout(() => ctrl.abort(), ms);
+  try {
+    const r = await fetch(url, {
+      signal: ctrl.signal,
+      headers: {
+        'User-Agent': 'ChemPulse/1.0 (energy intelligence platform; data@chempulse.app)',
+        'Accept': 'text/csv,text/plain,*/*'
+      }
+    });
+    clearTimeout(tid);
+    return r;
+  } catch(e) { clearTimeout(tid); throw e; }
 }
 
 export default async function handler(req, res) {
@@ -105,115 +119,120 @@ export default async function handler(req, res) {
   res.setHeader('Cache-Control', 's-maxage=21600');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  let csvUrl = null;
-
-  // Step 1: discover current CSV filename via datapackage_show
-  try {
-    const r = await get(`${BASE}/api/3/action/datapackage_show?id=${DATASET_ID}`, 8000);
-    if (r.ok) {
-      const j = await r.json();
-      const resources = j.result?.resources || [];
-      const res0 = resources.find(r => r.id === RESOURCE_ID) || resources[0];
-      if (res0?.path) csvUrl = res0.path.startsWith('http') ? res0.path : BASE + res0.path;
-      if (res0?.url)  csvUrl = res0.url;
-    }
-  } catch(e) {}
-
-  // Step 2: fallback to known static URL pattern (update date in filename)
-  if (!csvUrl) {
-    csvUrl = `${BASE}/dataset/${DATASET_ID}/resource/${RESOURCE_ID}/download/tec-register-27-january-2026.csv`;
-  }
-
-  // Step 3: fetch and parse CSV
+  const candidates = candidateUrls(8);
   let csvText = null;
-  const errors = [];
-  for (const url of [csvUrl, csvUrl.replace('27-january-2026', '18-march-2026'), csvUrl.replace('27-january-2026','14-march-2025')]) {
-    try {
-      const r = await get(url, 20000);
-      if (r.ok) { csvText = await r.text(); break; }
-      else errors.push(`${url.split('/').pop()}: HTTP ${r.status}`);
-    } catch(e) { errors.push(`${url.split('/').pop()}: ${e.message}`); }
+  let successUrl = null;
+  const tried = [];
+
+  // Try up to 20 most-recent candidates, in batches of 5 for speed
+  const toTry = candidates.slice(0, 30);
+  for (let i = 0; i < toTry.length; i += 5) {
+    const batch = toTry.slice(i, i + 5);
+    const results = await Promise.allSettled(
+      batch.map(url => tryFetch(url, 8000).then(async r => {
+        if (!r.ok) return { url, ok: false, status: r.status };
+        const text = await r.text();
+        // Validate it looks like a CSV (has comma-separated header with known columns)
+        const firstLine = text.split('\n')[0].toLowerCase();
+        if (!firstLine.includes('company') && !firstLine.includes('gsp') && !firstLine.includes('tec')) {
+          return { url, ok: false, status: 'invalid_csv' };
+        }
+        return { url, ok: true, text };
+      }).catch(e => ({ url, ok: false, status: e.message }))
+    ));
+
+    for (const r of results) {
+      if (r.status === 'fulfilled' && r.value.ok) {
+        csvText   = r.value.text;
+        successUrl = r.value.url;
+        break;
+      }
+      if (r.status === 'fulfilled') tried.push(`${r.value.url.split('/').pop()}: ${r.value.status}`);
+    }
+    if (csvText) break;
   }
 
   if (!csvText) {
-    return res.status(500).json({ error: 'Could not fetch TEC CSV', tried: errors, csvUrl });
+    return res.status(500).json({
+      error: 'Could not fetch TEC CSV — all candidates failed',
+      candidates_tried: tried.slice(0, 10),
+      hint: `NESO publishes at: ${BASE}/dataset/${DATASET_ID}/resource/${RESOURCE_ID}/download/tec-register-DD-month-YYYY.csv`
+    });
   }
 
+  // Parse CSV
   const rows = parseCSV(csvText);
-  if (rows.length < 2) return res.status(500).json({ error: 'CSV parse returned <2 rows' });
+  if (rows.length < 2) return res.status(500).json({ error: 'CSV has <2 rows', url: successUrl });
 
-  // Build header index
   const headers = rows[0].map(h => h.trim().toLowerCase().replace(/[^a-z0-9\s]/g,'').replace(/\s+/g,' '));
+  const fi = (...c) => { for (const s of c) { const i = headers.findIndex(h => h.includes(s.toLowerCase())); if (i>=0) return i; } return -1; };
   const col = {
-    projectNo:  headers.findIndex(h => h.includes('project no')),
-    projectId:  headers.findIndex(h => h.includes('project id') && !h.includes('old')),
-    company:    headers.findIndex(h => h.includes('company')),
-    technology: headers.findIndex(h => h.includes('technology')),
-    tec:        headers.findIndex(h => h === 'tec' || h.includes('installed capacity') || (h.includes('tec') && !h.includes('stec') && !h.includes('ldtec'))),
-    gsp:        headers.findIndex(h => h.includes('gsp') && !h.includes('group')),
-    gspGroup:   headers.findIndex(h => h.includes('gsp group') || h.includes('gsp grp')),
-    stage:      headers.findIndex(h => h === 'stage'),
-    gate:       headers.findIndex(h => h === 'gate'),
-    energDate:  headers.findIndex(h => h.includes('energisation') || (h.includes('date') && !h.includes('application'))),
-    status:     headers.findIndex(h => h === 'status'),
+    id:      fi('project no','project id'),
+    company: fi('company name','company'),
+    tech:    fi('technology'),
+    tec:     fi('tec installed','tec mw',) >= 0 ? fi('tec installed','tec mw') : headers.findIndex(h => h === 'tec' || (h.includes('tec') && !h.includes('stec') && !h.includes('ldtec') && !h.includes('temp'))),
+    gsp:     fi('grid supply point gsp','gsp name','gsp') >= 0 ? fi('grid supply point gsp','gsp name','gsp') : headers.findIndex(h => h.startsWith('gsp') && !h.includes('group')),
+    gspGrp:  fi('gsp group','gsp grp'),
+    stage:   fi('stage'),
+    gate:    fi('gate'),
+    energ:   fi('energisation date','energisation year','energisation'),
+    status:  fi('status'),
   };
 
-  const get_ = (row, key) => col[key] >= 0 ? (row[col[key]] || '').trim() : '';
+  const get = (row, k) => col[k] >= 0 ? (row[col[k]] || '').trim() : '';
 
   const records = [];
-  const clusterTotals = {}, techCounts = {};
+  const clusterTot = {}, techCnt = {};
   let totalMW = 0;
 
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i];
-    if (row.length < 3) continue;
-    const gsp = get_(row,'gsp') || get_(row,'gspGroup');
+    if (!row || row.length < 3) continue;
+    const company = get(row,'company');
+    const gsp     = get(row,'gsp') || get(row,'gspGrp');
+    if (!company && !gsp) continue;
+
     const cluster = getCluster(gsp);
-    const tech = normTech(get_(row,'technology'));
-    const mw = parseFloat(get_(row,'tec')) || 0;
-    const gate = get_(row,'gate');
-    const company = get_(row,'company');
-    if (!company && !gsp) continue; // skip blank rows
+    const tech    = normTech(get(row,'tech'));
+    const mw      = parseFloat(get(row,'tec')) || 0;
+    const gate    = get(row,'gate');
 
     totalMW += mw;
-    clusterTotals[cluster] = (clusterTotals[cluster] || 0) + mw;
-    techCounts[tech] = (techCounts[tech] || 0) + 1;
+    clusterTot[cluster] = (clusterTot[cluster]||0) + mw;
+    techCnt[tech]       = (techCnt[tech]||0) + 1;
 
     records.push({
-      project_no:  get_(row,'projectNo') || get_(row,'projectId'),
+      project_no:  get(row,'id'),
       company,
       technology:  tech,
-      technology_raw: get_(row,'technology'),
+      technology_raw: get(row,'tech'),
       tec_mw:      mw,
       gsp,
-      gsp_group:   get_(row,'gspGroup'),
       cluster,
-      stage:       get_(row,'stage'),
+      stage:       get(row,'stage'),
       gate,
-      gate_label:  gate === '1' ? 'Gate 1 — firm' : gate === '2' ? 'Gate 2 — queue' : gate || '',
-      energisation: get_(row,'energDate'),
-      status:      get_(row,'status'),
+      gate_label:  gate==='1'?'Gate 1 — firm': gate==='2'?'Gate 2 — queue': gate||'',
+      energisation: get(row,'energ'),
+      status:      get(row,'status'),
     });
   }
 
-  // Sort by cluster then MW descending
-  records.sort((a,b) => {
-    if (a.cluster !== b.cluster) return a.cluster.localeCompare(b.cluster);
-    return b.tec_mw - a.tec_mw;
-  });
+  records.sort((a,b) => a.cluster.localeCompare(b.cluster) || b.tec_mw - a.tec_mw);
 
-  const clustersSorted = Object.entries(clusterTotals)
-    .sort((a,b) => b[1]-a[1])
-    .map(([cluster, mw]) => ({ cluster, mw: Math.round(mw) }));
+  const clusters = Object.entries(clusterTot)
+    .sort((a,b)=>b[1]-a[1])
+    .map(([cluster,mw])=>({cluster, mw:Math.round(mw)}));
 
   res.status(200).json({
     records,
     meta: {
       total_records: records.length,
       total_mw: Math.round(totalMW),
-      clusters: clustersSorted,
-      tech_counts: techCounts,
-      csv_url: csvUrl,
+      clusters,
+      tech_counts: techCnt,
+      csv_url: successUrl,
+      headers_detected: headers.slice(0,12),
+      col_indices: col,
       source: 'NESO TEC Register — Open Data Licence',
       asOf: new Date().toISOString(),
     }
