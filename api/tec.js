@@ -1,81 +1,76 @@
-// api/tec.js
-// NESO Transmission Entry Capacity (TEC) Register
-// Tries multiple access methods — CSV download first, then CKAN JSON API
-// Free, no key required — api.neso.energy
+// api/tec.js — NESO TEC Register via CSV download (no CORS issues)
+// The CKAN datapackage_show endpoint reveals the current CSV filename
+// CSV is then fetched, parsed, and returned as structured JSON
+// Free, no key, Open Data Licence — api.neso.energy
+// Updated by NESO twice weekly (Tue/Fri)
 
 export const config = { maxDuration: 30 };
 
-const NESO_BASE = 'https://api.neso.energy';
-const DATASET_ID = 'cbd45e54-e6e2-4a38-99f1-8de6fd96d7c1';
-const RESOURCE_ID = '17becbab-e3e8-473f-b303-3806f43a6a10';
+const DATASET_ID   = 'cbd45e54-e6e2-4a38-99f1-8de6fd96d7c1';
+const RESOURCE_ID  = '17becbab-e3e8-473f-b303-3806f43a6a10';
+const BASE         = 'https://api.neso.energy';
 
-// Attempt order:
-// 1. CKAN datastore_search JSON API (fastest, structured)
-// 2. CKAN resource_show → follow actual download URL → CSV
-// 3. Known CSV URL pattern fallback
-
-const GSP_COORDS = {
-  'SALTEND':            { lat: 53.7296, lng: -0.2413, cluster: 'Humber',      site: 'Saltend Chemicals Park' },
-  'SOUTH HUMBER BANK':  { lat: 53.6215, lng: -0.1956, cluster: 'Humber',      site: 'South Humber Bank industrial' },
-  'SOUTH HUMBER':       { lat: 53.6215, lng: -0.1956, cluster: 'Humber',      site: 'South Humber Bank' },
-  'KILLINGHOLME':       { lat: 53.6380, lng: -0.2340, cluster: 'Humber',      site: 'South Humber Bank' },
-  'KEADBY':             { lat: 53.5890, lng: -0.7420, cluster: 'Humber',      site: 'Keadby / Scunthorpe' },
-  'GRIMSBY WEST':       { lat: 53.5630, lng: -0.0960, cluster: 'Humber',      site: 'Grimsby / South Humber' },
-  'GRIMSBY':            { lat: 53.5630, lng: -0.0960, cluster: 'Humber',      site: 'Grimsby' },
-  'BICKER FEN':         { lat: 52.9770, lng: -0.2070, cluster: 'Humber',      site: 'Lincolnshire coast' },
-  'DRAX':               { lat: 53.7367, lng: -1.0261, cluster: 'Humber',      site: 'Drax Power Station' },
-  'EGGBOROUGH':         { lat: 53.7163, lng: -1.1189, cluster: 'Humber',      site: 'Yorkshire / Humber' },
-  'FERRYBRIDGE':        { lat: 53.7080, lng: -1.2880, cluster: 'Humber',      site: 'Yorkshire' },
-  'WEST BURTON':        { lat: 53.3760, lng: -0.7930, cluster: 'Humber',      site: 'Nottinghamshire' },
-  'SEAL SANDS':         { lat: 54.6000, lng: -1.1750, cluster: 'Teesside',    site: 'Seal Sands industrial' },
-  'TEESSIDE':           { lat: 54.5990, lng: -1.1720, cluster: 'Teesside',    site: 'Teesside' },
-  'LACKENBY':           { lat: 54.5880, lng: -1.1490, cluster: 'Teesside',    site: 'Teesside / British Steel' },
-  'HARTLEPOOL':         { lat: 54.7000, lng: -1.2550, cluster: 'Teesside',    site: 'Hartlepool' },
-  'WILTON':             { lat: 54.5640, lng: -1.0960, cluster: 'Teesside',    site: 'Wilton / NEPIC cluster' },
-  'GRANGEMOUTH':        { lat: 56.0020, lng: -3.7150, cluster: 'Grangemouth', site: 'Grangemouth chemicals' },
-  'LONGANNET':          { lat: 56.0530, lng: -3.7130, cluster: 'Grangemouth', site: 'Firth of Forth' },
-  'MOSSMORRAN':         { lat: 56.0990, lng: -3.3250, cluster: 'Grangemouth', site: 'Shell Mossmorran' },
-  'FRODSHAM':           { lat: 53.2960, lng: -2.7280, cluster: 'Runcorn',     site: 'Runcorn / Merseyside' },
-  'STANLOW':            { lat: 53.2790, lng: -2.8590, cluster: 'Runcorn',     site: 'Stanlow refinery' },
-  'DEESIDE':            { lat: 53.2060, lng: -3.0380, cluster: 'Runcorn',     site: 'Deeside industrial' },
-  'HORNSEA':            { lat: 53.9180, lng:  0.1620, cluster: 'Offshore',    site: 'Hornsea offshore wind' },
-  'CREYKE BECK':        { lat: 53.8500, lng: -0.4800, cluster: 'Humber',      site: 'Humber coast offshore' },
-  'BURBO BANK':         { lat: 53.4850, lng: -3.1750, cluster: 'Offshore',    site: 'Burbo Bank offshore wind' },
-  'DUNGENESS':          { lat: 50.9150, lng:  0.9590, cluster: 'Nuclear',     site: 'Dungeness nuclear' },
-  'SIZEWELL':           { lat: 52.2140, lng:  1.6200, cluster: 'Nuclear',     site: 'Sizewell nuclear' },
-  'HINKLEY':            { lat: 51.2090, lng: -3.1310, cluster: 'Nuclear',     site: 'Hinkley Point nuclear' },
-  'HEYSHAM':            { lat: 54.0280, lng: -2.9160, cluster: 'Nuclear',     site: 'Heysham nuclear' },
-  'GRAIN':              { lat: 51.4430, lng:  0.7200, cluster: 'Thames',      site: 'Isle of Grain' },
-  'KINGSNORTH':         { lat: 51.3860, lng:  0.6280, cluster: 'Thames',      site: 'Medway' },
+// Cluster assignment by GSP keyword
+const GSP_CLUSTER = {
+  // Humber
+  SALTEND:'Humber', 'SOUTH HUMBER':'Humber', KILLINGHOLME:'Humber',
+  KEADBY:'Humber', GRIMSBY:'Humber', 'BICKER FEN':'Humber',
+  DRAX:'Humber', EGGBOROUGH:'Humber', FERRYBRIDGE:'Humber',
+  'WEST BURTON':'Humber', 'CREYKE BECK':'Humber',
+  // Teesside
+  'SEAL SANDS':'Teesside', TEESSIDE:'Teesside', LACKENBY:'Teesside',
+  HARTLEPOOL:'Teesside', WILTON:'Teesside', NUNTHORPE:'Teesside',
+  BLYTH:'Teesside', CAMBOIS:'Teesside',
+  // Grangemouth / Scotland central
+  GRANGEMOUTH:'Grangemouth', LONGANNET:'Grangemouth', MOSSMORRAN:'Grangemouth',
+  DENNY:'Grangemouth', 'BONNYBRIDGE':'Grangemouth',
+  // Runcorn / North West
+  FRODSHAM:'Runcorn', STANLOW:'Runcorn', DEESIDE:'Runcorn',
+  BREDBURY:'Runcorn', PENWORTHAM:'Runcorn', KEARSLEY:'Runcorn',
+  'RAIN HILL':'Runcorn', 'LISTER DRIVE':'Runcorn',
+  // Nuclear
+  HEYSHAM:'Nuclear', SIZEWELL:'Nuclear', HINKLEY:'Nuclear',
+  DUNGENESS:'Nuclear', TORNESS:'Nuclear', HUNTERSTON:'Nuclear',
+  WYLFA:'Nuclear', DOUNREAY:'Nuclear',
+  // Scotland
+  PETERHEAD:'Scotland', BLACKHILLOCK:'Scotland', NAIRN:'Scotland',
+  INVERNESS:'Scotland', BEAUTY:'Scotland', HARKER:'Scotland',
+  CHAPELCROSS:'Scotland', COALBURN:'Scotland', KAIMES:'Scotland',
+  GORGIE:'Scotland', ANDERSON:'Scotland', TEALING:'Scotland',
+  DUNDEE:'Scotland', PERTH:'Scotland', DUNBAR:'Scotland',
 };
 
-function matchGSP(raw) {
-  if (!raw) return null;
-  const s = raw.toUpperCase().trim();
-  if (GSP_COORDS[s]) return { key: s, ...GSP_COORDS[s] };
-  let best = null, bestLen = 0;
-  for (const [key, val] of Object.entries(GSP_COORDS)) {
-    if (s.includes(key) || key.includes(s.split(' ')[0])) {
-      if (key.length > bestLen) { best = { key, ...val }; bestLen = key.length; }
-    }
+function getCluster(gsp) {
+  if (!gsp) return 'Other';
+  const u = gsp.toUpperCase();
+  for (const [key, cluster] of Object.entries(GSP_CLUSTER)) {
+    if (u.includes(key)) return cluster;
   }
-  return best;
+  // Regional fallbacks
+  if (/YORK|LEEDS|BRADFORD|HULL|LINCOLN|NOTTING|DERBY|SHEFFIELD|BARNSLEY/.test(u)) return 'Yorkshire';
+  if (/EDINBURGH|GLASGOW|STIRLING|FIFE|ANGUS|ABERDEEN|HIGHLAND|ARGYLL/.test(u)) return 'Scotland';
+  if (/WALES|CARDIFF|SWANSEA|NEWPORT|PEMBROKE|ABERYSTWYTH/.test(u)) return 'Wales';
+  if (/LONDON|KENT|SURREY|ESSEX|SUFFOLK|NORFOLK|CAMBS|BEDS|HERTS/.test(u)) return 'South East';
+  if (/DEVON|CORNWALL|DORSET|SOMERSET|WILTS|HANTS|BRISTOL/.test(u)) return 'South West';
+  if (/MIDLAND|BIRMINGHAM|COVENTRY|STAFFORD|WORCESTER|LEICS|NORTHANTS/.test(u)) return 'Midlands';
+  if (/MANCHESTER|LIVERPOOL|LANCASHIRE|CHESHIRE|CUMBRIA/.test(u)) return 'North West';
+  return 'Other';
 }
 
-function normaliseTech(raw) {
+function normTech(raw) {
   const t = (raw || '').toLowerCase();
-  if (t.includes('offshore wind') || t.includes('offshore')) return 'Offshore Wind';
-  if (t.includes('onshore wind') || (t.includes('wind') && !t.includes('offshore'))) return 'Wind Onshore';
-  if (t.includes('solar') || t.includes('photovoltaic')) return 'Solar';
+  if (t.includes('offshore')) return 'Offshore Wind';
+  if (t.includes('wind'))     return 'Onshore Wind';
+  if (t.includes('solar'))    return 'Solar';
   if (t.includes('battery') || t.includes('storage')) return 'Battery Storage';
   if (t.includes('hydrogen')) return 'Hydrogen';
-  if (t.includes('nuclear')) return 'Nuclear';
-  if (t.includes('gas') || t.includes('ccgt') || t.includes('ocgt')) return 'Gas (CCGT/OCGT)';
-  if (t.includes('biomass')) return 'Biomass';
+  if (t.includes('nuclear'))  return 'Nuclear';
+  if (t.includes('gas') || t.includes('ccgt') || t.includes('ocgt')) return 'Gas';
+  if (t.includes('biomass'))  return 'Biomass';
   if (t.includes('interconnect')) return 'Interconnector';
-  if (t.includes('hydro')) return 'Hydro';
-  if (t.includes('tidal') || t.includes('wave') || t.includes('marine')) return 'Marine';
-  if (t.includes('carbon capture') || t.includes('ccus') || t.includes('ccs')) return 'CCS/CCUS';
+  if (t.includes('hydro'))    return 'Hydro';
+  if (t.includes('tidal') || t.includes('wave')) return 'Marine';
+  if (t.includes('ccs') || t.includes('ccus') || t.includes('carbon capture')) return 'CCS/CCUS';
   return raw || 'Other';
 }
 
@@ -84,12 +79,9 @@ function parseCSV(text) {
   let field = '', row = [], inQ = false;
   for (let i = 0; i < text.length; i++) {
     const c = text[i];
-    if (c === '"') {
-      if (inQ && text[i+1] === '"') { field += '"'; i++; }
-      else inQ = !inQ;
-    } else if (c === ',' && !inQ) {
-      row.push(field.trim()); field = '';
-    } else if ((c === '\n' || c === '\r') && !inQ) {
+    if (c === '"') { if (inQ && text[i+1] === '"') { field += '"'; i++; } else inQ = !inQ; }
+    else if (c === ',' && !inQ) { row.push(field.trim()); field = ''; }
+    else if ((c === '\n' || c === '\r') && !inQ) {
       if (c === '\r' && text[i+1] === '\n') i++;
       row.push(field.trim()); field = '';
       if (row.some(f => f)) rows.push(row);
@@ -100,106 +92,12 @@ function parseCSV(text) {
   return rows;
 }
 
-function buildFeatures(records) {
-  if (!records || !records.length) return [];
-  
-  // Detect header row vs record object
-  const isObj = typeof records[0] === 'object' && !Array.isArray(records[0]);
-  
-  let getField;
-  if (isObj) {
-    // JSON API records — find fields case-insensitively
-    const keys = Object.keys(records[0]);
-    const find = (...candidates) => {
-      for (const c of candidates) {
-        const k = keys.find(k => k.toLowerCase().includes(c.toLowerCase()));
-        if (k) return k;
-      }
-      return null;
-    };
-    const F = {
-      id:       find('Project No', 'Project ID', 'projectno', 'projectid') || keys[0],
-      company:  find('Company Name', 'Company', 'company') || keys[1],
-      tech:     find('Technology', 'tech') || keys[2],
-      tec:      find('TEC', 'Capacity', 'MW', 'tec') || keys[3],
-      gsp:      find('GSP', 'Grid Supply Point', 'Substation') || keys[4],
-      stage:    find('Stage') || '',
-      gate:     find('Gate') || '',
-      energy:   find('Energisation', 'Date', 'Year') || '',
-      status:   find('Status') || '',
-    };
-    getField = (rec, key) => String(rec[F[key]] ?? '').trim();
-  } else {
-    // CSV — first row is headers
-    const headers = records[0].map(h => h.toLowerCase().replace(/[^a-z0-9]/g, ''));
-    const find = (...candidates) => {
-      for (const c of candidates) {
-        const idx = headers.findIndex(h => h.includes(c.toLowerCase().replace(/[^a-z0-9]/g, '')));
-        if (idx >= 0) return idx;
-      }
-      return -1;
-    };
-    const F = {
-      id:      find('projectno', 'projectid'),
-      company: find('companyname', 'company'),
-      tech:    find('technology', 'tech'),
-      tec:     find('tec', 'capacity', 'mw'),
-      gsp:     find('gsp', 'gridsupply', 'substation'),
-      stage:   find('stage'),
-      gate:    find('gate'),
-      energy:  find('energisation', 'date', 'year'),
-      status:  find('status'),
-    };
-    const dataRows = records.slice(1);
-    getField = (rec, key) => F[key] >= 0 ? String(rec[F[key]] ?? '').trim() : '';
-    records = dataRows;
-  }
-
-  const features = [];
-  const unmapped = {};
-  for (const rec of records) {
-    const gspRaw = getField(rec, 'gsp');
-    const matched = matchGSP(gspRaw);
-    if (!matched) { unmapped[gspRaw || 'BLANK'] = (unmapped[gspRaw || 'BLANK'] || 0) + 1; }
-    const mw = parseFloat(getField(rec, 'tec')) || 0;
-    features.push({
-      type: 'Feature',
-      geometry: matched ? { type: 'Point', coordinates: [matched.lng, matched.lat] } : null,
-      properties: {
-        project_id:    getField(rec, 'id'),
-        company:       getField(rec, 'company'),
-        technology:    normaliseTech(getField(rec, 'tech')),
-        technology_raw: getField(rec, 'tech'),
-        tec_mw:        mw,
-        gsp:           gspRaw,
-        gsp_matched:   matched?.key || null,
-        cluster:       matched?.cluster || null,
-        site_context:  matched?.site || null,
-        stage:         getField(rec, 'stage'),
-        gate:          getField(rec, 'gate'),
-        energisation:  getField(rec, 'energy'),
-        status:        getField(rec, 'status'),
-        has_coords:    !!matched,
-      }
-    });
-  }
-  return { features, unmapped };
-}
-
-async function tryFetch(url, timeout = 18000) {
+async function get(url, timeout = 15000) {
   const ctrl = new AbortController();
   const tid = setTimeout(() => ctrl.abort(), timeout);
-  try {
-    const r = await fetch(url, {
-      headers: { Accept: 'application/json, text/csv, text/plain, */*' },
-      signal: ctrl.signal
-    });
-    clearTimeout(tid);
-    return r;
-  } catch (e) {
-    clearTimeout(tid);
-    throw e;
-  }
+  const r = await fetch(url, { headers: { Accept: '*/*' }, signal: ctrl.signal });
+  clearTimeout(tid);
+  return r;
 }
 
 export default async function handler(req, res) {
@@ -207,117 +105,116 @@ export default async function handler(req, res) {
   res.setHeader('Cache-Control', 's-maxage=21600');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const errors = [];
-  let records = null;
-  let method = '';
+  let csvUrl = null;
 
-  // ── Method 1: CKAN datastore_search JSON ─────────────────────────────────
+  // Step 1: discover current CSV filename via datapackage_show
   try {
-    const url = `${NESO_BASE}/api/3/action/datastore_search?resource_id=${RESOURCE_ID}&limit=10000`;
-    const r = await tryFetch(url, 15000);
+    const r = await get(`${BASE}/api/3/action/datapackage_show?id=${DATASET_ID}`, 8000);
     if (r.ok) {
-      const json = await r.json();
-      if (json.success && json.result?.records?.length) {
-        records = json.result.records;
-        method = 'ckan_json';
-      } else {
-        errors.push(`CKAN JSON: success=${json.success}, records=${json.result?.records?.length ?? 'none'}`);
-      }
-    } else {
-      const body = await r.text().catch(() => '');
-      errors.push(`CKAN JSON: HTTP ${r.status} — ${body.slice(0, 200)}`);
+      const j = await r.json();
+      const resources = j.result?.resources || [];
+      const res0 = resources.find(r => r.id === RESOURCE_ID) || resources[0];
+      if (res0?.path) csvUrl = res0.path.startsWith('http') ? res0.path : BASE + res0.path;
+      if (res0?.url)  csvUrl = res0.url;
     }
-  } catch (e) {
-    errors.push(`CKAN JSON: ${e.message}`);
+  } catch(e) {}
+
+  // Step 2: fallback to known static URL pattern (update date in filename)
+  if (!csvUrl) {
+    csvUrl = `${BASE}/dataset/${DATASET_ID}/resource/${RESOURCE_ID}/download/tec-register-27-january-2026.csv`;
   }
 
-  // ── Method 2: resource_show → follow actual download URL ──────────────────
-  if (!records) {
+  // Step 3: fetch and parse CSV
+  let csvText = null;
+  const errors = [];
+  for (const url of [csvUrl, csvUrl.replace('27-january-2026', '18-march-2026'), csvUrl.replace('27-january-2026','14-march-2025')]) {
     try {
-      const r = await tryFetch(
-        `${NESO_BASE}/api/3/action/resource_show?id=${RESOURCE_ID}`, 8000
-      );
-      if (r.ok) {
-        const json = await r.json();
-        const downloadUrl = json.result?.url;
-        if (downloadUrl) {
-          const csvR = await tryFetch(downloadUrl, 15000);
-          if (csvR.ok) {
-            const text = await csvR.text();
-            const rows = parseCSV(text);
-            if (rows.length > 2) { records = rows; method = 'csv_via_resource_show'; }
-            else errors.push(`CSV via resource_show: only ${rows.length} rows`);
-          } else {
-            errors.push(`CSV download: HTTP ${csvR.status}`);
-          }
-        } else {
-          errors.push('resource_show: no URL in response');
-        }
-      } else {
-        errors.push(`resource_show: HTTP ${r.status}`);
-      }
-    } catch (e) {
-      errors.push(`resource_show: ${e.message}`);
-    }
+      const r = await get(url, 20000);
+      if (r.ok) { csvText = await r.text(); break; }
+      else errors.push(`${url.split('/').pop()}: HTTP ${r.status}`);
+    } catch(e) { errors.push(`${url.split('/').pop()}: ${e.message}`); }
   }
 
-  // ── Method 3: Direct CSV URL (known pattern from similar NESO datasets) ───
-  if (!records) {
-    const candidates = [
-      `${NESO_BASE}/dataset/${DATASET_ID}/resource/${RESOURCE_ID}/download/tec_register.csv`,
-      `${NESO_BASE}/dataset/${DATASET_ID}/resource/${RESOURCE_ID}/download/tec-register.csv`,
-    ];
-    for (const url of candidates) {
-      try {
-        const r = await tryFetch(url, 12000);
-        if (r.ok) {
-          const text = await r.text();
-          const rows = parseCSV(text);
-          if (rows.length > 2) { records = rows; method = `csv_direct:${url.split('/').pop()}`; break; }
-        } else {
-          errors.push(`CSV direct ${url.split('/').pop()}: HTTP ${r.status}`);
-        }
-      } catch (e) {
-        errors.push(`CSV direct: ${e.message}`);
-      }
-    }
+  if (!csvText) {
+    return res.status(500).json({ error: 'Could not fetch TEC CSV', tried: errors, csvUrl });
   }
 
-  if (!records) {
-    return res.status(500).json({
-      error: 'All NESO fetch methods failed',
-      methods_tried: errors,
-      resource_id: RESOURCE_ID,
-      dataset_id: DATASET_ID,
-      hint: 'NESO may be blocking server-side requests. Try accessing https://api.neso.energy/api/3/action/datastore_search?resource_id=17becbab-e3e8-473f-b303-3806f43a6a10&limit=5 directly in your browser to confirm the API is accessible.'
+  const rows = parseCSV(csvText);
+  if (rows.length < 2) return res.status(500).json({ error: 'CSV parse returned <2 rows' });
+
+  // Build header index
+  const headers = rows[0].map(h => h.trim().toLowerCase().replace(/[^a-z0-9\s]/g,'').replace(/\s+/g,' '));
+  const col = {
+    projectNo:  headers.findIndex(h => h.includes('project no')),
+    projectId:  headers.findIndex(h => h.includes('project id') && !h.includes('old')),
+    company:    headers.findIndex(h => h.includes('company')),
+    technology: headers.findIndex(h => h.includes('technology')),
+    tec:        headers.findIndex(h => h === 'tec' || h.includes('installed capacity') || (h.includes('tec') && !h.includes('stec') && !h.includes('ldtec'))),
+    gsp:        headers.findIndex(h => h.includes('gsp') && !h.includes('group')),
+    gspGroup:   headers.findIndex(h => h.includes('gsp group') || h.includes('gsp grp')),
+    stage:      headers.findIndex(h => h === 'stage'),
+    gate:       headers.findIndex(h => h === 'gate'),
+    energDate:  headers.findIndex(h => h.includes('energisation') || (h.includes('date') && !h.includes('application'))),
+    status:     headers.findIndex(h => h === 'status'),
+  };
+
+  const get_ = (row, key) => col[key] >= 0 ? (row[col[key]] || '').trim() : '';
+
+  const records = [];
+  const clusterTotals = {}, techCounts = {};
+  let totalMW = 0;
+
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    if (row.length < 3) continue;
+    const gsp = get_(row,'gsp') || get_(row,'gspGroup');
+    const cluster = getCluster(gsp);
+    const tech = normTech(get_(row,'technology'));
+    const mw = parseFloat(get_(row,'tec')) || 0;
+    const gate = get_(row,'gate');
+    const company = get_(row,'company');
+    if (!company && !gsp) continue; // skip blank rows
+
+    totalMW += mw;
+    clusterTotals[cluster] = (clusterTotals[cluster] || 0) + mw;
+    techCounts[tech] = (techCounts[tech] || 0) + 1;
+
+    records.push({
+      project_no:  get_(row,'projectNo') || get_(row,'projectId'),
+      company,
+      technology:  tech,
+      technology_raw: get_(row,'technology'),
+      tec_mw:      mw,
+      gsp,
+      gsp_group:   get_(row,'gspGroup'),
+      cluster,
+      stage:       get_(row,'stage'),
+      gate,
+      gate_label:  gate === '1' ? 'Gate 1 — firm' : gate === '2' ? 'Gate 2 — queue' : gate || '',
+      energisation: get_(row,'energDate'),
+      status:      get_(row,'status'),
     });
   }
 
-  const { features, unmapped } = buildFeatures(records);
-
-  const techCounts = {}, clusterMW = {};
-  let mappedMW = 0, unmappedMW = 0;
-  features.forEach(f => {
-    const p = f.properties;
-    techCounts[p.technology] = (techCounts[p.technology] || 0) + 1;
-    if (p.cluster) clusterMW[p.cluster] = (clusterMW[p.cluster] || 0) + (p.tec_mw || 0);
-    if (p.has_coords) mappedMW += p.tec_mw;
-    else unmappedMW += p.tec_mw;
+  // Sort by cluster then MW descending
+  records.sort((a,b) => {
+    if (a.cluster !== b.cluster) return a.cluster.localeCompare(b.cluster);
+    return b.tec_mw - a.tec_mw;
   });
 
+  const clustersSorted = Object.entries(clusterTotals)
+    .sort((a,b) => b[1]-a[1])
+    .map(([cluster, mw]) => ({ cluster, mw: Math.round(mw) }));
+
   res.status(200).json({
-    type: 'FeatureCollection',
-    features,
+    records,
     meta: {
-      total_features: features.length,
-      mapped_to_coords: features.filter(f => f.properties.has_coords).length,
-      mapped_mw: Math.round(mappedMW),
-      unmapped_mw: Math.round(unmappedMW),
+      total_records: records.length,
+      total_mw: Math.round(totalMW),
+      clusters: clustersSorted,
       tech_counts: techCounts,
-      cluster_mw: clusterMW,
-      top_unmapped_gsps: Object.entries(unmapped).sort((a,b)=>b[1]-a[1]).slice(0,15).map(([gsp,n])=>({gsp,n})),
-      fetch_method: method,
-      source: 'NESO TEC Register — api.neso.energy — Open Data Licence',
+      csv_url: csvUrl,
+      source: 'NESO TEC Register — Open Data Licence',
       asOf: new Date().toISOString(),
     }
   });
