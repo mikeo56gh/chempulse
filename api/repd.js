@@ -72,10 +72,11 @@ function bngToWgs84(E, N) {
   const pWGS=Math.sqrt(xH**2+yH**2);
   const latFinal=Math.atan2(zH+0.00669438*6356752.3142*(zH/Math.sqrt(pWGS**2+zH**2)),pWGS);
   const lonFinal=Math.atan2(yH,xH);
-  return [
-    +lonFinal*(180/Math.PI).toFixed(6),
-    +latFinal*(180/Math.PI).toFixed(6)
-  ];
+  const latDeg = latFinal * (180/Math.PI);
+  const lonDeg = lonFinal * (180/Math.PI);
+  // Strict UK bounding box — drop anything outside
+  if (latDeg < 49.5 || latDeg > 61.5 || lonDeg < -9.0 || lonDeg > 2.5) return null;
+  return [+lonDeg.toFixed(6), +latDeg.toFixed(6)];
 }
 
 // Status normalisation
@@ -188,6 +189,8 @@ export default async function handler(req, res) {
 
       const E = parseFloat(r[col.easting]);
       const N = parseFloat(r[col.northing]);
+      // Skip zero/tiny coordinates — these are missing data in the CSV
+      if (!E || !N || E < 1000 || N < 1000) { skipped++; continue; }
       const coords = bngToWgs84(E, N);
       if (!coords) { skipped++; continue; }
 
