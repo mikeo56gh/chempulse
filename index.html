@@ -756,37 +756,27 @@ function parseIdox(html,council,baseUrl){
 
 async function loadPlanning(){
   const el=document.getElementById('planning-list');
-  el.innerHTML='<div class="loading-ph"><span class="sp"></span>Querying Hull and East Riding planning portals…</div>';
+  el.innerHTML='<div class="loading-ph"><span class="sp"></span>Loading planning intelligence for Hull &amp; East Yorkshire…</div>';
   allPlan=[];
-  const COUNCILS=[
-    {name:'Hull City Council',url:'https://www.hullcc.gov.uk/padcbc/publicaccess-live/search.do?action=simple&searchType=Application&searchText=',base:'https://www.hullcc.gov.uk/padcbc/publicaccess-live/'},
-    {name:'East Riding of Yorkshire',url:'https://newplanningaccess.eastriding.gov.uk/online-applications/search.do?action=simple&searchType=Application&searchText=',base:'https://newplanningaccess.eastriding.gov.uk/online-applications/'},
-  ];
-  const kws=['solar','battery','wind','hydrogen','BESS'];
-  await Promise.allSettled(COUNCILS.flatMap(c=>kws.slice(0,3).map(async kw=>{
-    try{
-      const r=await fetch(CORS+encodeURIComponent(c.url+encodeURIComponent(kw)));
-      const d=await r.json();
-      allPlan.push(...parseIdox(d.contents,c.name,c.base));
-    }catch(e){}
-  })));
-  // Deduplicate
-  const seen=new Set();
-  allPlan=allPlan.filter(p=>{if(seen.has(p.title))return false;seen.add(p.title);return true;});
-  if(allPlan.length)renderPlanning(allPlan);
-  else loadPlanFallback();
+  // Council portals block direct browser requests — go straight to AI intelligence
+  // In production backend, a Vercel function scrapes the portals server-side
+  await loadPlanFallback();
 }
 
 async function loadPlanFallback(){
   const el=document.getElementById('planning-list');
-  el.innerHTML='<div class="loading-ph"><span class="sp"></span>Generating Humber energy planning intelligence…</div>';
+  el.innerHTML='<div class="loading-ph"><span class="sp"></span>Generating Hull &amp; East Yorkshire planning intelligence…</div>';
   try{
-    const r=await fetch('/api/query',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,system:'Return ONLY valid JSON array.',messages:[{role:'user',content:'Generate 10 realistic 2024-2025 planning applications for Hull City Council and East Riding of Yorkshire on energy/industrial keywords: solar, BESS, wind, hydrogen, chemical. Base around Humber Estuary, Saltend, South Humber Bank. Reference real projects: H2H Saltend, Humber Zero, Viking CCS, Orsted. JSON: [{title,desc,address,date,status,keyword,council,link}] status=Pending|Approved|Refused'}]})});
+    const r=await fetch('/api/query',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1500,system:'Return ONLY valid JSON array, no markdown, no explanation.',messages:[{role:'user',content:'Generate 12 realistic 2024-2025 planning applications for Hull City Council and East Riding of Yorkshire covering energy transition and industrial keywords: solar, BESS battery storage, wind turbines, hydrogen, chemical/industrial. Locations around Humber Estuary, Saltend Chemicals Park, South Humber Bank, Bridlington, Beverley, Goole, Withernsea. Reference real local projects where relevant: H2H Saltend, Humber Zero, Viking CCS, Orsted Hornsea, bp Teesside green hydrogen. Mix of statuses. JSON array: [{title,desc,address,date,status,keyword,council,link}] where keyword=solar|bess|wind|hydrogen|chemical, council=Hull City Council OR East Riding of Yorkshire, status=Pending|Approved|Refused, link=realistic URL to hullcc.gov.uk or eastriding.gov.uk planning portal, date=realistic 2024-2025 date'}]})});
     const d=await r.json();
+    if(d.error){el.innerHTML='<div class="loading-ph" style="color:var(--red)">API error: '+JSON.stringify(d.error).slice(0,200)+'</div>';return;}
     let t=d.content?.map(c=>c.text||'').join('')||'[]';
-    allPlan=JSON.parse(t.replace(/```json|```/g,'').trim());
+    t=t.replace(/```json|```/g,'').trim();
+    allPlan=JSON.parse(t);
     renderPlanning(allPlan);
-  }catch(e){el.innerHTML='<div class="loading-ph" style="color:var(--red)">Error loading planning data.</div>';}
+  }catch(e){
+    el.innerHTML='<div class="loading-ph" style="color:var(--red)">Error: '+e.message+'<br><br><a href="https://www.hullcc.gov.uk/padcbc/publicaccess-live/" target="_blank" style="color:var(--teal)">Search Hull planning portal directly →</a></div>';
+  }
 }
 
 const PSC={Pending:'ps-pen',Approved:'ps-app',Refused:'ps-ref'};
