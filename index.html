@@ -634,6 +634,7 @@ nav::-webkit-scrollbar{display:none}
       </select>
       <span id="repd-count" style="margin-left:auto;font-size:.65rem;color:var(--mid)"></span>
       <span id="tec-toggle-btn" class="fchip" onclick="toggleTECLayer()" style="margin-left:.25rem;border:1px solid #06b6d4;color:#0891b2" title="Toggle TEC pipeline layer">⚡ TEC pipeline</span>
+      <button class="ai-btn" style="width:auto;padding:.25rem .75rem;margin-left:.25rem;font-size:.7rem" onclick="clearRepdFilters()" title="Remove all filters and show blank map">✕ Clear</button>
       <button class="ai-btn" style="width:auto;padding:.25rem .75rem;margin-left:.25rem;font-size:.7rem" onclick="toggleRepdView()">⇄ Table</button>
     </div>
 
@@ -1810,18 +1811,28 @@ async function loadTEC() {
   if (panelContent) panelContent.innerHTML = '<span style="color:#94a3b8">Fetching from NESO…</span>';
   try {
     const controller = new AbortController();
-    const tid = setTimeout(() => controller.abort(), 25000);
+    const tid = setTimeout(() => controller.abort(), 28000);
     const r = await fetch('/api/tec', { signal: controller.signal });
     clearTimeout(tid);
-    if (!r.ok) throw new Error('TEC API ' + r.status);
-    const gj = await r.json();
-    if (gj.error) throw new Error(gj.error);
+    const gj = await r.json().catch(() => ({ error: 'Non-JSON response from /api/tec' }));
+    if (!r.ok || gj.error) {
+      const tried = Array.isArray(gj.methods_tried)
+        ? '<div style="margin-top:.35rem;font-size:.62rem;color:#94a3b8;line-height:1.5">'
+          + gj.methods_tried.map(m => '• ' + m).join('<br>')
+          + '</div>'
+        : '';
+      const hint = gj.hint ? '<div style="margin-top:.3rem;font-size:.62rem;color:#0891b2">' + gj.hint + '</div>' : '';
+      if (panelContent) panelContent.innerHTML =
+        '<span style="color:#ef4444;font-weight:500">' + (gj.error || 'TEC API error ' + r.status) + '</span>'
+        + tried + hint;
+      return;
+    }
     tecData = gj;
     tecLoaded = true;
     renderTECLayer();
     renderTECPanel(gj.meta);
   } catch(e) {
-    if (panelContent) panelContent.innerHTML = `<span style="color:#ef4444">Error: ${e.message}</span>`;
+    if (panelContent) panelContent.innerHTML = '<span style="color:#ef4444">Error: ' + e.message + '</span>';
   }
 }
 
@@ -2097,6 +2108,24 @@ function repdFilter(el, key, val) {
     repdFilters[key] = val;
   }
   applyRepdFilters();
+}
+
+function clearRepdFilters() {
+  // Reset all filter state
+  repdFilters = { tech:'all', status:'all', region:'all', chp:'0_off' };
+  // Deactivate all chips and reactivate the 'all' ones
+  document.querySelectorAll('#repd-filters [data-rf]').forEach(el => {
+    el.classList.remove('act');
+    if (el.dataset.rv === 'all') el.classList.add('act');
+    if (el.dataset.rf === 'chp') el.classList.remove('act');
+  });
+  // Reset MW select
+  const mwSel = document.getElementById('repd-mw');
+  if (mwSel) mwSel.value = '0';
+  // Clear map completely
+  if (repdMarkers) { repdMap.removeLayer(repdMarkers); repdMarkers = null; }
+  document.getElementById('repd-count').textContent = 'Filters cleared — select options above to show projects';
+  document.getElementById('repd-detail').style.display = 'none';
 }
 
 function applyRepdFilters() {
