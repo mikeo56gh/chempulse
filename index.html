@@ -474,7 +474,7 @@ nav::-webkit-scrollbar{display:none}
       <div class="card" style="margin-bottom:1rem">
         <div style="font-size:.72rem;color:var(--mid);margin-bottom:.75rem;line-height:1.5">
           Actual metered output from Elexon B1610 dataset. Select a date range to see when each unit was running.
-          <span style="color:var(--amber)">Note: B1610 has ~5 working day lag</span> — dates from the last 5 days may show incomplete data. Use PN (live tab above) for recent output.
+          <span style="color:var(--amber)">Note: B1610 has ~7–10 working day lag</span> — dates from the last 5 days may show incomplete data. Use PN (live tab above) for recent output.
         </div>
 
         <!-- Date range pickers -->
@@ -1333,9 +1333,18 @@ function renderHistChart(data) {
   }
 
   if (points.length === 0) {
-    el.innerHTML = `<div style="color:var(--amber);font-size:.75rem;padding:.5rem">
-      No B1610 data found for this range. B1610 has a ~5 working day lag — try dates older than 7 days.<br>
-      <a href="https://bmrs.elexon.co.uk/actual-generation-output-per-generation-unit" target="_blank" style="color:var(--teal)">View B1610 on BMRS →</a>
+    const debugInfo = data.history?.map(u =>
+      `${u.bmu}: ${u.total_readings||0} readings${u.stream_error?' (error: '+u.stream_error+')':''}`
+    ).join('<br>') || '';
+    el.innerHTML = `<div style="color:var(--amber);font-size:.75rem;padding:.6rem;background:rgba(245,158,11,.06);border-radius:6px;border-left:2px solid var(--amber)">
+      <strong>No B1610 generation data returned for T_SCCL-1/2/3.</strong><br><br>
+      <strong>Most likely reasons:</strong><br>
+      1. B1610 has a <strong>~7 working day lag</strong> — try dates at least 10 days ago<br>
+      2. The BMU IDs may differ — verify on BMRS using the link below<br>
+      3. Date range may be in the future<br><br>
+      ${debugInfo ? `<em style="font-size:.68rem;color:var(--dim)">${debugInfo}</em><br><br>` : ''}
+      <a href="https://bmrs.elexon.co.uk/actual-generation-output-per-generation-unit" target="_blank" style="color:var(--teal)">View B1610 on BMRS →</a> &nbsp;·&nbsp;
+      <a href="https://bmrs.elexon.co.uk/balancing-mechanism-bmu-view" target="_blank" style="color:var(--teal)">Verify BMU IDs →</a>
     </div>`;
     return;
   }
