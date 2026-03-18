@@ -1869,6 +1869,71 @@ document.querySelector('[data-p="tec"]').addEventListener('click',()=>{if(!tecDa
 
 // ═══════════ TEC REGISTER ═══════════
 
+function getClusterFn(gsp) {
+  if (!gsp) return 'Other';
+  const u = gsp.toUpperCase();
+  const map = {SALTEND:'Humber','SOUTH HUMBER':'Humber',KILLINGHOLME:'Humber',KEADBY:'Humber',
+    GRIMSBY:'Humber','BICKER FEN':'Humber',DRAX:'Humber',EGGBOROUGH:'Humber',
+    FERRYBRIDGE:'Humber','WEST BURTON':'Humber','CREYKE BECK':'Humber',
+    'SEAL SANDS':'Teesside',TEESSIDE:'Teesside',LACKENBY:'Teesside',HARTLEPOOL:'Teesside',WILTON:'Teesside',
+    GRANGEMOUTH:'Grangemouth',LONGANNET:'Grangemouth',MOSSMORRAN:'Grangemouth',
+    FRODSHAM:'Runcorn',STANLOW:'Runcorn',DEESIDE:'Runcorn',BREDBURY:'Runcorn',
+    HEYSHAM:'Nuclear',SIZEWELL:'Nuclear',HINKLEY:'Nuclear',DUNGENESS:'Nuclear',TORNESS:'Nuclear',HUNTERSTON:'Nuclear',
+    PETERHEAD:'Scotland',BLACKHILLOCK:'Scotland',INVERNESS:'Scotland',HARKER:'Scotland',
+  };
+  for (const [k,v] of Object.entries(map)) if (u.includes(k)) return v;
+  if (/YORK|LEEDS|BRADFORD|HULL|LINCOLN|NOTTING|DERBY|SHEFFIELD/.test(u)) return 'Yorkshire';
+  if (/EDINBURGH|GLASGOW|STIRLING|FIFE|ANGUS|ABERDEEN|HIGHLAND|ARGYLL/.test(u)) return 'Scotland';
+  if (/WALES|CARDIFF|SWANSEA|NEWPORT|PEMBROKE/.test(u)) return 'Wales';
+  if (/KENT|SURREY|ESSEX|SUFFOLK|NORFOLK|CAMBS/.test(u)) return 'South East';
+  if (/DEVON|CORNWALL|DORSET|SOMERSET|WILTS|HANTS/.test(u)) return 'South West';
+  if (/MIDLAND|BIRMINGHAM|COVENTRY|STAFFORD|WORCESTER/.test(u)) return 'Midlands';
+  if (/MANCHESTER|LIVERPOOL|LANCASHIRE|CHESHIRE|CUMBRIA/.test(u)) return 'North West';
+  return 'Other';
+}
+
+function normTechFn(raw) {
+  const t = (raw||'').toLowerCase();
+  if (t.includes('offshore')) return 'Offshore Wind';
+  if (t.includes('wind'))     return 'Onshore Wind';
+  if (t.includes('solar'))    return 'Solar';
+  if (t.includes('battery')||t.includes('storage')) return 'Battery Storage';
+  if (t.includes('hydrogen')) return 'Hydrogen';
+  if (t.includes('nuclear'))  return 'Nuclear';
+  if (t.includes('gas')||t.includes('ccgt')||t.includes('ocgt')) return 'Gas';
+  if (t.includes('biomass'))  return 'Biomass';
+  if (t.includes('interconnect')) return 'Interconnector';
+  if (t.includes('hydro'))    return 'Hydro';
+  if (t.includes('ccs')||t.includes('ccus')||t.includes('carbon capture')) return 'CCS/CCUS';
+  return raw || 'Other';
+}
+
+function finaliseTEC(records, clusters, totalMW, sourceLabel) {
+  tecRecords    = records;
+  tecDataLoaded = true;
+  document.getElementById('tec-s-total').textContent = records.length.toLocaleString();
+  document.getElementById('tec-s-mw').textContent    = (Math.round(totalMW/1000*10)/10).toLocaleString() + ' GW';
+  document.getElementById('tec-s-g1').textContent    = records.filter(r=>r.gate==='1').length.toLocaleString();
+  document.getElementById('tec-s-g2').textContent    = records.filter(r=>r.gate==='2').length.toLocaleString();
+  const maxMW = clusters[0]?.mw || 1;
+  document.getElementById('tec-cluster-bar').innerHTML = clusters.slice(0,8).map(c => {
+    const col2 = TEC_CLUSTER_COL[c.cluster] || '#94a3b8';
+    const pct = Math.round((c.mw/maxMW)*100);
+    return `<div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.2rem;font-size:.68rem">
+      <div style="width:80px;color:var(--mid);text-align:right;flex-shrink:0">${c.cluster}</div>
+      <div style="flex:1;height:10px;background:var(--s3);border-radius:3px;overflow:hidden">
+        <div style="width:${pct}%;height:100%;background:${col2};border-radius:3px"></div>
+      </div>
+      <div style="font-family:var(--mono);font-size:.65rem;color:var(--navy);width:70px">${c.mw.toLocaleString()} MW</div>
+    </div>`;
+  }).join('');
+  document.getElementById('tec-loading').style.display = 'none';
+  document.getElementById('tec-stats').style.display   = 'block';
+  document.getElementById('tec-table').style.display   = 'table';
+  document.getElementById('tec-count').textContent     = `${records.length.toLocaleString()} projects · ${sourceLabel}`;
+  applyTECFilters();
+}
+
 let tecDataLoaded = false, tecRecords = [], tecFiltersState = {cluster:'all', tech:'all', gate:'all'};
 let tecSortCol = 'tec_mw', tecSortAsc = false;
 
@@ -1895,30 +1960,23 @@ async function loadTEC() {
   tableEl.style.display = 'none';
   statsEl.style.display = 'none';
 
-  // Known good URLs — NESO CSV download (browser fetch works, no CORS issue)
-  // Format: dataset/{dataset-id}/resource/{resource-id}/download/{filename}
-  const BASE = 'https://api.neso.energy/dataset/cbd45e54-e6e2-4a38-99f1-8de6fd96d7c1/resource/17becbab-e3e8-473f-b303-3806f43a6a10/download';
-  const MONTHS = ['january','february','march','april','may','june','july','august','september','october','november','december'];
+  const DATASET_ID  = 'cbd45e54-e6e2-4a38-99f1-8de6fd96d7c1';
+  const RESOURCE_ID = '17becbab-e3e8-473f-b303-3806f43a6a10';
+  const CKAN_BASE   = 'https://api.neso.energy/api/3/action';
 
-  // Generate candidate URLs: today back 60 days, Tue/Fri only
-  function candidates() {
-    const urls = new Set();
-    // Known URL from Jan 2026
-    urls.add(`${BASE}/tec-register-27-january-2026.csv`);
-    // Generate from today backwards
-    const now = new Date();
-    for (let d = 0; d < 60; d++) {
-      const date = new Date(now);
-      date.setDate(date.getDate() - d);
-      const dow = date.getDay();
-      if (dow !== 2 && dow !== 5) continue; // Tue=2, Fri=5
-      const day = date.getDate();
-      const mon = MONTHS[date.getMonth()];
-      const yr  = date.getFullYear();
-      urls.add(`${BASE}/tec-register-${String(day).padStart(2,'0')}-${mon}-${yr}.csv`);
-      urls.add(`${BASE}/tec-register-${day}-${mon}-${yr}.csv`);
-    }
-    return [...urls];
+  // JSONP helper for CKAN (avoids CORS entirely — injects script tag)
+  function jsonp(url) {
+    return new Promise((resolve, reject) => {
+      const cb = '_neso_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+      const script = document.createElement('script');
+      const timer = setTimeout(() => {
+        delete window[cb]; script.remove(); reject(new Error('JSONP timeout'));
+      }, 20000);
+      window[cb] = data => { clearTimeout(timer); delete window[cb]; script.remove(); resolve(data); };
+      script.onerror = () => { clearTimeout(timer); delete window[cb]; reject(new Error('JSONP load error')); };
+      script.src = url + (url.includes('?') ? '&' : '?') + 'callback=' + cb;
+      document.head.appendChild(script);
+    });
   }
 
   // Minimal CSV parser
@@ -1944,22 +2002,87 @@ async function loadTEC() {
   }
 
   try {
-    const urls = candidates();
+    // Strategy 1: discover latest CSV URL via CKAN package API (JSONP)
     let csvText = null, csvUrl = null;
-
-    for (const url of urls) {
-      try {
-        const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
-        if (!r.ok) continue;
-        const t = await r.text();
-        const firstLine = t.split('\n')[0].toLowerCase();
-        if (firstLine.includes('company') || firstLine.includes('gsp') || firstLine.includes('tec')) {
-          csvText = t; csvUrl = url; break;
+    try {
+      loading.querySelector ? null : null; // noop
+      const pkg = await jsonp(`${CKAN_BASE}/package_show?id=${DATASET_ID}`);
+      if (pkg.success && pkg.result?.resources) {
+        const res = pkg.result.resources.find(r => r.id === RESOURCE_ID || r.format === 'CSV');
+        if (res?.url) {
+          const r = await fetch(res.url, { signal: AbortSignal.timeout(12000) });
+          if (r.ok) {
+            const t = await r.text();
+            const fl = t.split('\n')[0].toLowerCase();
+            if (fl.includes('company') || fl.includes('gsp') || fl.includes('tec')) {
+              csvText = t; csvUrl = res.url;
+            }
+          }
         }
-      } catch(e) { continue; }
+      }
+    } catch(e) { /* fall through to strategy 2 */ }
+
+    // Strategy 2: CKAN datastore_search JSONP — get all records as JSON (no CSV needed)
+    if (!csvText) {
+      loading.innerHTML = '<span class="sp"></span> Loading via NESO API…';
+      const PAGE = 5000;
+      const first = await jsonp(`${CKAN_BASE}/datastore_search?resource_id=${RESOURCE_ID}&limit=${PAGE}&offset=0`);
+      if (!first.success) throw new Error('NESO CKAN API error');
+      let allRecs = first.result.records || [];
+      const total = first.result.total || allRecs.length;
+      if (total > PAGE) {
+        const pages = Math.ceil((total - PAGE) / PAGE);
+        const fetches = [];
+        for (let i = 1; i <= pages; i++) {
+          fetches.push(
+            jsonp(`${CKAN_BASE}/datastore_search?resource_id=${RESOURCE_ID}&limit=${PAGE}&offset=${i * PAGE}`)
+              .then(d => d.result?.records || []).catch(() => [])
+          );
+        }
+        const extra = await Promise.all(fetches);
+        extra.forEach(p => allRecs.push(...p));
+      }
+      if (!allRecs.length) throw new Error('NESO returned 0 records');
+
+      // Convert JSON records → rows array format expected below
+      // Detect field names from first record
+      const sample = allRecs[0];
+      const keys = Object.keys(sample);
+      const fk = (...needles) => keys.find(k => needles.some(n =>
+        k.toLowerCase().replace(/[^a-z0-9]/g,'').includes(n.toLowerCase().replace(/[^a-z0-9]/g,''))
+      )) || null;
+      const F = {
+        id:      fk('projectno','projectid'),
+        company: fk('companyname','company'),
+        tech:    fk('technology'),
+        tec:     keys.find(k => { const l=k.toLowerCase().replace(/[^a-z0-9]/g,''); return l==='tec'||(l.startsWith('tec')&&!l.includes('stec')&&!l.includes('ldtec')); }),
+        gsp:     keys.find(k => (k.toLowerCase().includes('gsp')||k.toLowerCase().includes('gridsupply'))&&!k.toLowerCase().includes('group')),
+        gspgrp:  fk('gspgroup','gspgrp'),
+        stage:   fk('stage'), gate: fk('gate'), energ: fk('energisation'), status: fk('status'),
+      };
+      const getF = (rec, k) => F[k] ? String(rec[F[k]] ?? '').trim() : '';
+
+      // Jump straight to record processing using JSON records
+      const records2 = []; const clusterTot2 = {}, techCnt2 = {}; let totalMW2 = 0;
+      for (const rec of allRecs) {
+        const company = getF(rec,'company'), gsp = getF(rec,'gsp') || getF(rec,'gspgrp');
+        if (!company && !gsp) continue;
+        const cluster = getClusterFn(gsp), tech = normTechFn(getF(rec,'tech'));
+        const mw = parseFloat(getF(rec,'tec')) || 0, gate = getF(rec,'gate');
+        totalMW2 += mw; clusterTot2[cluster]=(clusterTot2[cluster]||0)+mw; techCnt2[tech]=(techCnt2[tech]||0)+1;
+        records2.push({ project_no:getF(rec,'id'), company, technology:tech, technology_raw:getF(rec,'tech'),
+          tec_mw:mw, gsp, cluster, stage:getF(rec,'stage'), gate,
+          gate_label: gate==='1'?'Gate 1 — firm':gate==='2'?'Gate 2 — queue':gate||'',
+          energisation:getF(rec,'energ'), status:getF(rec,'status') });
+      }
+      if (!records2.length) throw new Error('0 records parsed from API');
+      records2.sort((a,b)=>a.cluster.localeCompare(b.cluster)||b.tec_mw-a.tec_mw);
+      const clusters2=Object.entries(clusterTot2).sort((a,b)=>b[1]-a[1]).map(([cluster,mw])=>({cluster,mw:Math.round(mw)}));
+      finaliseTEC(records2, clusters2, Math.round(totalMW2), `NESO API · ${total} records`);
+      return;
     }
 
-    if (!csvText) throw new Error('Could not find TEC CSV — tried ' + urls.length + ' URLs');
+    if (!csvText) throw new Error('Could not load TEC data from NESO');
 
     const rows = parseCSV(csvText);
     if (rows.length < 2) throw new Error('CSV parsed but too few rows');
@@ -1980,51 +2103,12 @@ async function loadTEC() {
     };
     const get = (row, k) => col[k] >= 0 ? (row[col[k]] || '').trim() : '';
 
-    function getCluster(gsp) {
-      if (!gsp) return 'Other';
-      const u = gsp.toUpperCase();
-      const map = {SALTEND:'Humber','SOUTH HUMBER':'Humber',KILLINGHOLME:'Humber',KEADBY:'Humber',
-        GRIMSBY:'Humber','BICKER FEN':'Humber',DRAX:'Humber',EGGBOROUGH:'Humber',
-        FERRYBRIDGE:'Humber','WEST BURTON':'Humber','CREYKE BECK':'Humber',
-        'SEAL SANDS':'Teesside',TEESSIDE:'Teesside',LACKENBY:'Teesside',HARTLEPOOL:'Teesside',WILTON:'Teesside',
-        GRANGEMOUTH:'Grangemouth',LONGANNET:'Grangemouth',MOSSMORRAN:'Grangemouth',
-        FRODSHAM:'Runcorn',STANLOW:'Runcorn',DEESIDE:'Runcorn',BREDBURY:'Runcorn',
-        HEYSHAM:'Nuclear',SIZEWELL:'Nuclear',HINKLEY:'Nuclear',DUNGENESS:'Nuclear',TORNESS:'Nuclear',HUNTERSTON:'Nuclear',
-        PETERHEAD:'Scotland',BLACKHILLOCK:'Scotland',INVERNESS:'Scotland',HARKER:'Scotland',
-      };
-      for (const [k,v] of Object.entries(map)) if (u.includes(k)) return v;
-      if (/YORK|LEEDS|BRADFORD|HULL|LINCOLN|NOTTING|DERBY|SHEFFIELD/.test(u)) return 'Yorkshire';
-      if (/EDINBURGH|GLASGOW|STIRLING|FIFE|ANGUS|ABERDEEN|HIGHLAND|ARGYLL/.test(u)) return 'Scotland';
-      if (/WALES|CARDIFF|SWANSEA|NEWPORT|PEMBROKE/.test(u)) return 'Wales';
-      if (/KENT|SURREY|ESSEX|SUFFOLK|NORFOLK|CAMBS/.test(u)) return 'South East';
-      if (/DEVON|CORNWALL|DORSET|SOMERSET|WILTS|HANTS/.test(u)) return 'South West';
-      if (/MIDLAND|BIRMINGHAM|COVENTRY|STAFFORD|WORCESTER/.test(u)) return 'Midlands';
-      if (/MANCHESTER|LIVERPOOL|LANCASHIRE|CHESHIRE|CUMBRIA/.test(u)) return 'North West';
-      return 'Other';
-    }
-
-    function normTech(raw) {
-      const t = (raw||'').toLowerCase();
-      if (t.includes('offshore')) return 'Offshore Wind';
-      if (t.includes('wind'))     return 'Onshore Wind';
-      if (t.includes('solar'))    return 'Solar';
-      if (t.includes('battery')||t.includes('storage')) return 'Battery Storage';
-      if (t.includes('hydrogen')) return 'Hydrogen';
-      if (t.includes('nuclear'))  return 'Nuclear';
-      if (t.includes('gas')||t.includes('ccgt')||t.includes('ocgt')) return 'Gas';
-      if (t.includes('biomass'))  return 'Biomass';
-      if (t.includes('interconnect')) return 'Interconnector';
-      if (t.includes('hydro'))    return 'Hydro';
-      if (t.includes('ccs')||t.includes('ccus')||t.includes('carbon capture')) return 'CCS/CCUS';
-      return raw || 'Other';
-    }
-
     const records = []; const clusterTot = {}, techCnt = {}; let totalMW = 0;
     for (let i = 1; i < rows.length; i++) {
       const row = rows[i]; if (!row || row.length < 3) continue;
       const company = get(row,'company'), gsp = get(row,'gsp') || get(row,'gspGrp');
       if (!company && !gsp) continue;
-      const cluster = getCluster(gsp), tech = normTech(get(row,'tech'));
+      const cluster = getClusterFn(gsp), tech = normTechFn(get(row,'tech'));
       const mw = parseFloat(get(row,'tec')) || 0, gate = get(row,'gate');
       totalMW += mw;
       clusterTot[cluster] = (clusterTot[cluster]||0) + mw;
@@ -2042,34 +2126,7 @@ async function loadTEC() {
 
     records.sort((a,b) => a.cluster.localeCompare(b.cluster)||b.tec_mw-a.tec_mw);
     const clusters = Object.entries(clusterTot).sort((a,b)=>b[1]-a[1]).map(([cluster,mw])=>({cluster,mw:Math.round(mw)}));
-
-    tecRecords    = records;
-    tecDataLoaded = true;
-
-    // Stats
-    document.getElementById('tec-s-total').textContent = records.length.toLocaleString();
-    document.getElementById('tec-s-mw').textContent    = (Math.round(totalMW/1000*10)/10).toLocaleString() + ' GW';
-    document.getElementById('tec-s-g1').textContent    = records.filter(r=>r.gate==='1').length.toLocaleString();
-    document.getElementById('tec-s-g2').textContent    = records.filter(r=>r.gate==='2').length.toLocaleString();
-
-    const maxMW = clusters[0]?.mw || 1;
-    document.getElementById('tec-cluster-bar').innerHTML = clusters.slice(0,8).map(c => {
-      const col2 = TEC_CLUSTER_COL[c.cluster] || '#94a3b8';
-      const pct = Math.round((c.mw/maxMW)*100);
-      return `<div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.2rem;font-size:.68rem">
-        <div style="width:80px;color:var(--mid);text-align:right;flex-shrink:0">${c.cluster}</div>
-        <div style="flex:1;height:10px;background:var(--s3);border-radius:3px;overflow:hidden">
-          <div style="width:${pct}%;height:100%;background:${col2};border-radius:3px"></div>
-        </div>
-        <div style="font-family:var(--mono);font-size:.65rem;color:var(--navy);width:70px">${c.mw.toLocaleString()} MW</div>
-      </div>`;
-    }).join('');
-
-    loading.style.display = 'none';
-    statsEl.style.display = 'block';
-    tableEl.style.display = 'table';
-    document.getElementById('tec-count').textContent = `${records.length.toLocaleString()} projects · ${csvUrl.split('/').pop()}`;
-    applyTECFilters();
+    finaliseTEC(records, clusters, Math.round(totalMW), csvUrl ? csvUrl.split('/').pop() : 'CSV');
 
   } catch(e) {
     loading.style.display = 'none';
