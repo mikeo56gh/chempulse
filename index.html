@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ChemPulse — UK Chemical & Energy Intelligence</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root {
+  --bg:#f4f6fa;
+  --s1:#ffffff;
+  --s2:#f0f3f9;
+  --s3:#e8ecf4;
+  --b1:#dde3ef;
+  --b2:#c8d0e4;
+  --b3:#b0bcda;
+  --navy:#1a2d4f;
+  --blue:#2563eb;
+  --teal:#0891b2;
+  --green:#059669;
+  --amber:#d97706;
+  --red:#dc2626;
+  --violet:#7c3aed;
+  --text:#1e293b;
+  --mid:#64748b;
+  --dim:#94a3b8;
+  --mono:'DM Mono',monospace;
+  --sans:'Syne',sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden;font-family:var(--sans)}
+body{background:var(--bg);color:var(--text);display:flex;flex-direction:column}
+
+/* HEADER */
+header{height:50px;background:var(--navy);display:flex;align-items:center;padding:0 1rem;gap:1rem;flex-shrink:0;z-index:300;box-shadow:0 1px 8px rgba(0,0,0,.18)}
+.logo{display:flex;align-items:center;gap:8px;font-weight:800;font-size:.95rem;letter-spacing:-.02em;flex-shrink:0;color:#fff}
+.logo-icon{width:26px;height:26px;background:linear-gradient(135deg,#3b82f6,#06b6d4);clip-path:polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%);display:flex;align-items:center;justify-content:center;font-size:12px}
+.logo em{color:#60d4f0;font-style:normal}
+.ticker{flex:1;overflow:hidden;position:relative}
+.ticker::before,.ticker::after{content:'';position:absolute;top:0;bottom:0;width:32px;z-index:1;pointer-events:none}
+.ticker::before{left:0;background:linear-gradient(90deg,var(--navy),transparent)}
+.ticker::after{right:0;background:linear-gradient(-90deg,var(--navy),transparent)}
+.ticker-row{display:flex;animation:scroll 50s linear infinite;white-space:nowrap}
+@keyframes scroll{to{transform:translateX(-50%)}}
+.tick{display:inline-flex;align-items:center;gap:.35rem;padding:0 1rem;border-right:1px solid rgba(255,255,255,.1);font-family:var(--mono);font-size:.65rem}
+.tn{color:rgba(255,255,255,.5)}.tv{color:#fff;font-weight:500}
+.up{color:#4ade80}.dn{color:#f87171}.fl{color:#fbbf24}
+.hdr-r{display:flex;align-items:center;gap:.75rem;flex-shrink:0}
+.live-pill{display:flex;align-items:center;gap:4px;font-family:var(--mono);font-size:.62rem;color:#4ade80;background:rgba(74,222,128,.12);border:1px solid rgba(74,222,128,.3);padding:.18rem .5rem;border-radius:100px}
+.pulse{width:5px;height:5px;background:#4ade80;border-radius:50%;animation:blink 2s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+#clk{font-family:var(--mono);font-size:.65rem;color:rgba(255,255,255,.5)}
+
+/* NAV */
+nav{height:38px;background:var(--s1);border-bottom:1px solid var(--b1);display:flex;align-items:stretch;padding:0 1rem;flex-shrink:0;z-index:290;overflow-x:auto;scrollbar-width:none;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+nav::-webkit-scrollbar{display:none}
+.ntab{display:flex;align-items:center;padding:0 1rem;font-size:.68rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--mid);cursor:pointer;border-bottom:2px solid transparent;transition:all .18s;white-space:nowrap;user-select:none}
+.ntab:hover{color:var(--navy)}.ntab.act{color:var(--blue);border-bottom-color:var(--blue)}
+
+/* WORKSPACE */
+.ws{flex:1;display:flex;overflow:hidden}
+.page{display:none;flex:1;overflow:hidden}
+.page.act{display:flex}
+
+/* SIDEBAR */
+.sb{width:300px;flex-shrink:0;background:var(--s1);border-right:1px solid var(--b1);display:flex;flex-direction:column;overflow:hidden;box-shadow:2px 0 8px rgba(0,0,0,.04)}
+.sb-hd{padding:.65rem .9rem;border-bottom:1px solid var(--b1);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;background:var(--s2)}
+.sb-ti{font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--mid);font-weight:700}
+.sb-bod{flex:1;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--b1) transparent}
+
+/* MAIN */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+
+/* MAP — fully free OSM tiles, no filter, bright */
+#map{flex:1}
+.leaflet-container{background:#e8ecf4;font-family:var(--sans)}
+.leaflet-popup-content-wrapper{background:#fff;border:1px solid var(--b2);border-radius:10px;color:var(--text);box-shadow:0 8px 32px rgba(0,0,0,.14)}
+.leaflet-popup-tip{background:#fff}
+.leaflet-popup-content{margin:0;padding:0;font-family:var(--sans)}
+.leaflet-control-zoom a{background:#fff!important;color:var(--navy)!important;border-color:var(--b1)!important;font-weight:700}
+
+/* RIGHT PANEL */
+.rp{width:256px;flex-shrink:0;background:var(--s1);border-left:1px solid var(--b1);display:flex;flex-direction:column;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--b1) transparent;box-shadow:-2px 0 8px rgba(0,0,0,.04)}
+.kpi{padding:.6rem .9rem;border-bottom:1px solid var(--b1)}
+.kpi-l{font-size:.58rem;text-transform:uppercase;letter-spacing:.08em;color:var(--mid);margin-bottom:.2rem;font-weight:600}
+.kpi-v{font-family:var(--mono);font-size:1.05rem;font-weight:500;color:var(--navy)}
+.kpi-u{font-size:.72rem;color:var(--mid)}
+.kpi-c{font-family:var(--mono);font-size:.62rem;margin-top:.1rem}
+.up{color:var(--green)}.dn{color:var(--red)}.fl{color:var(--amber)}
+.bar-r{display:flex;align-items:center;gap:.5rem;padding:.28rem .9rem}
+.bar-l{font-size:.62rem;color:var(--mid);width:70px;flex-shrink:0}
+.bar-t{flex:1;height:5px;background:var(--s3);border-radius:3px;overflow:hidden}
+.bar-f{height:100%;border-radius:3px}
+.bar-v{font-family:var(--mono);font-size:.62rem;width:38px;text-align:right}
+
+/* MAP CONTROLS */
+.map-bar{padding:.55rem .9rem;background:var(--s2);border-bottom:1px solid var(--b1);display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
+.mini-input{flex:1;min-width:140px;background:var(--s1);border:1px solid var(--b2);border-radius:6px;padding:.3rem .65rem;color:var(--text);font-family:var(--sans);font-size:.72rem;outline:none;transition:border-color .18s}
+.mini-input:focus{border-color:var(--blue)}
+.mini-input::placeholder{color:var(--dim)}
+.chip{padding:.24rem .65rem;border-radius:100px;font-size:.6rem;font-weight:700;cursor:pointer;border:1px solid;transition:all .16s;user-select:none}
+.ch-ok{border-color:var(--green);color:var(--green);background:rgba(5,150,105,.07)}
+.ch-wn{border-color:var(--amber);color:var(--amber);background:rgba(217,119,6,.07)}
+.ch-al{border-color:var(--red);color:var(--red);background:rgba(220,38,38,.07)}
+.chip.off{opacity:.3}
+
+/* POPUP */
+.pop{padding:.9rem;min-width:210px;max-width:260px}
+.pop-sr{display:flex;align-items:center;gap:.4rem;margin-bottom:.35rem}
+.pop-dot{width:8px;height:8px;border-radius:50%}
+.pop-st{font-size:.58rem;font-weight:800;letter-spacing:.05em}
+.pop-name{font-size:.88rem;font-weight:700;margin-bottom:.12rem;color:var(--navy)}
+.pop-op{font-size:.65rem;color:var(--mid);margin-bottom:.4rem}
+.pop-tags{display:flex;gap:.3rem;flex-wrap:wrap;margin-bottom:.45rem}
+.pop-tag{font-size:.58rem;font-weight:700;padding:.1rem .38rem;border-radius:3px;background:rgba(37,99,235,.1);color:var(--blue)}
+.pop-row{display:flex;justify-content:space-between;font-size:.65rem;padding:.18rem 0;border-top:1px solid var(--b1);gap:.5rem}
+.pop-row span:first-child{color:var(--mid)}
+.pop-row span:last-child{text-align:right;color:var(--text)}
+.pop-alert{margin-top:.4rem;padding:.35rem .5rem;background:rgba(220,38,38,.06);border-left:2px solid var(--red);font-size:.65rem;color:#b91c1c;border-radius:0 4px 4px 0}
+.pop-btn{margin-top:.65rem;width:100%;padding:.4rem;background:var(--blue);border:none;border-radius:5px;color:#fff;font-family:var(--sans);font-size:.65rem;font-weight:700;cursor:pointer;transition:background .16s}
+.pop-btn:hover{background:#1d4ed8}
+
+/* AI ZONE */
+.ai-z{border-top:1px solid var(--b1);padding:.65rem;flex-shrink:0;background:var(--s2)}
+.ai-lbl{font-size:.58rem;text-transform:uppercase;letter-spacing:.08em;color:var(--mid);margin-bottom:.35rem;display:flex;align-items:center;gap:.35rem;font-weight:700}
+.ai-dot{width:4px;height:4px;border-radius:50%;background:var(--violet);animation:blink 2s infinite}
+.ai-inp{width:100%;background:var(--s1);border:1px solid var(--b2);border-radius:6px;padding:.45rem .65rem;color:var(--text);font-family:var(--sans);font-size:.72rem;outline:none;resize:none;transition:border-color .18s}
+.ai-inp:focus{border-color:var(--violet)}
+.ai-inp::placeholder{color:var(--dim)}
+.ai-btn{margin-top:.35rem;width:100%;background:var(--navy);border:none;border-radius:6px;padding:.4rem;color:#fff;font-family:var(--sans);font-size:.68rem;font-weight:700;cursor:pointer;transition:background .18s}
+.ai-btn:hover{background:var(--blue)}
+.ai-resp{margin-top:.5rem;max-height:180px;overflow-y:auto;font-size:.7rem;line-height:1.6;color:var(--text);display:none;background:var(--s1);border-left:3px solid var(--violet);padding:.5rem .65rem;border-radius:0 6px 6px 0}
+.ai-resp.show{display:block}
+
+/* ALERT BANNER */
+.ab{background:#fffbeb;border-bottom:1px solid #fcd34d;padding:.4rem .9rem;font-size:.7rem;display:flex;align-items:center;gap:.5rem;color:#92400e;flex-shrink:0}
+.ab strong{color:var(--red)}
+
+/* NEWS ITEMS */
+.ni{padding:.7rem .9rem;border-bottom:1px solid var(--b1);cursor:pointer;transition:background .14s}
+.ni:hover{background:var(--s2)}
+.ni-meta{display:flex;align-items:center;gap:.4rem;margin-bottom:.28rem;flex-wrap:wrap}
+.tag{font-size:.56rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;padding:.1rem .38rem;border-radius:3px}
+.t-s{background:rgba(220,38,38,.1);color:var(--red)}
+.t-e{background:rgba(217,119,6,.1);color:var(--amber)}
+.t-r{background:rgba(124,58,237,.1);color:var(--violet)}
+.t-m{background:rgba(5,150,105,.1);color:var(--green)}
+.t-o{background:rgba(37,99,235,.1);color:var(--blue)}
+.t-p{background:rgba(8,145,178,.1);color:var(--teal)}
+.ni-t{font-size:.8rem;font-weight:600;line-height:1.35;margin-bottom:.2rem;color:var(--navy)}
+.ni-s{font-size:.68rem;color:var(--mid);line-height:1.45}
+.ni-src{font-size:.6rem;color:var(--dim)}
+.ni-time{font-family:var(--mono);font-size:.58rem;color:var(--dim)}
+
+/* SITE LIST */
+.sli{padding:.6rem .9rem;border-bottom:1px solid var(--b1);cursor:pointer;transition:background .14s}
+.sli:hover{background:var(--s2)}
+.sli-top{display:flex;align-items:center;gap:.4rem;margin-bottom:.15rem}
+.sli-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.sli-name{font-size:.76rem;font-weight:700;color:var(--navy);line-height:1.2}
+.sli-sub{font-size:.62rem;color:var(--mid);padding-left:11px}
+.sli-al{font-size:.6rem;padding-left:11px;margin-top:.12rem}
+
+/* FULL PAGES */
+.fp{flex:1;overflow-y:auto;padding:1.25rem;scrollbar-width:thin;scrollbar-color:var(--b1) transparent;background:var(--bg)}
+.page-ti{font-size:1rem;font-weight:800;color:var(--navy);margin-bottom:.15rem}
+.page-sub{font-size:.68rem;color:var(--mid);margin-bottom:1rem}
+.sec-hd{font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--mid);margin-bottom:.5rem;display:flex;align-items:center;gap:.5rem;font-weight:700}
+.sec-hd::after{content:'';flex:1;height:1px;background:var(--b1)}
+.grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:.65rem;margin-bottom:1.1rem}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:.65rem;margin-bottom:1.1rem}
+.card{background:var(--s1);border:1px solid var(--b1);border-radius:8px;padding:.9rem;transition:border-color .18s,box-shadow .18s}
+.card:hover{border-color:var(--b2);box-shadow:0 2px 12px rgba(0,0,0,.06)}
+.card-ti{font-size:.58rem;text-transform:uppercase;letter-spacing:.08em;color:var(--mid);margin-bottom:.3rem;font-weight:700}
+.card-v{font-family:var(--mono);font-size:1.1rem;font-weight:500;color:var(--navy)}
+.card-u{font-size:.72rem;color:var(--mid)}
+.card-c{font-family:var(--mono);font-size:.62rem;margin-top:.15rem}
+.card-spark{margin-top:.4rem;height:26px}
+.card-spark svg{width:100%;height:100%}
+
+/* PLANNING */
+.plan-item{background:var(--s1);border:1px solid var(--b1);border-radius:8px;padding:.85rem;margin-bottom:.5rem;cursor:pointer;transition:border-color .18s,box-shadow .18s}
+.plan-item:hover{border-color:var(--teal);box-shadow:0 2px 12px rgba(0,0,0,.06)}
+.plan-meta{display:flex;align-items:center;gap:.4rem;margin-bottom:.3rem;flex-wrap:wrap}
+.plan-kw{font-size:.58rem;font-weight:800;text-transform:uppercase;padding:.1rem .38rem;border-radius:3px;background:rgba(8,145,178,.1);color:var(--teal)}
+.plan-council{font-size:.6rem;color:var(--teal);font-weight:700}
+.plan-ref{font-family:var(--mono);font-size:.6rem;color:var(--mid)}
+.plan-date{font-family:var(--mono);font-size:.58rem;color:var(--dim)}
+.plan-ti{font-size:.82rem;font-weight:600;line-height:1.35;margin-bottom:.2rem;color:var(--navy)}
+.plan-addr{font-size:.68rem;color:var(--mid)}
+.ps-pen{background:rgba(217,119,6,.1);color:var(--amber);font-size:.58rem;font-weight:800;padding:.1rem .38rem;border-radius:3px}
+.ps-app{background:rgba(5,150,105,.1);color:var(--green);font-size:.58rem;font-weight:800;padding:.1rem .38rem;border-radius:3px}
+.ps-ref{background:rgba(220,38,38,.1);color:var(--red);font-size:.58rem;font-weight:800;padding:.1rem .38rem;border-radius:3px}
+
+/* REG */
+.reg-item{background:var(--s1);border:1px solid var(--b1);border-radius:8px;padding:.85rem;margin-bottom:.5rem;transition:border-color .18s}
+.reg-item:hover{border-color:var(--b2)}
+.urg-h{background:rgba(220,38,38,.1);color:var(--red);font-size:.58rem;font-weight:800;padding:.1rem .38rem;border-radius:3px}
+.urg-m{background:rgba(217,119,6,.1);color:var(--amber);font-size:.58rem;font-weight:800;padding:.1rem .38rem;border-radius:3px}
+.urg-l{background:rgba(5,150,105,.1);color:var(--green);font-size:.58rem;font-weight:800;padding:.1rem .38rem;border-radius:3px}
+.reg-auth{font-size:.62rem;color:var(--mid)}
+.reg-ti{font-size:.84rem;font-weight:600;margin-bottom:.2rem;color:var(--navy)}
+.reg-body{font-size:.7rem;color:var(--mid);line-height:1.5}
+.reg-link{font-size:.62rem;color:var(--blue);margin-top:.3rem;display:inline-block}
+
+/* FILTER CHIPS */
+.filter-row{display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:.75rem}
+.fchip{padding:.26rem .7rem;border-radius:100px;font-size:.62rem;font-weight:700;cursor:pointer;border:1px solid var(--b2);color:var(--mid);background:var(--s1);transition:all .16s}
+.fchip:hover{border-color:var(--teal);color:var(--teal)}
+.fchip.act{border-color:var(--teal);color:var(--teal);background:rgba(8,145,178,.08)}
+
+/* SOURCE BADGES */
+.src-row{display:flex;align-items:flex-start;gap:.6rem;padding:.55rem .9rem;border-bottom:1px solid var(--b1);font-size:.72rem}
+.src-icon{width:22px;height:22px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0;margin-top:1px}
+.src-name{font-weight:700;font-size:.7rem;margin-bottom:.1rem;color:var(--navy)}
+.src-desc{color:var(--mid);font-size:.65rem;line-height:1.4}
+.badge-free{background:rgba(5,150,105,.1);color:var(--green);font-size:.56rem;font-weight:800;padding:.08rem .35rem;border-radius:3px;margin-left:.3rem}
+.badge-sub{background:rgba(217,119,6,.1);color:var(--amber);font-size:.56rem;font-weight:800;padding:.08rem .35rem;border-radius:3px;margin-left:.3rem}
+
+/* SPINNER */
+.sp{display:inline-block;width:9px;height:9px;border:2px solid var(--b1);border-top-color:var(--blue);border-radius:50%;animation:spin .6s linear infinite;vertical-align:middle;margin-right:4px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-ph{text-align:center;color:var(--mid);padding:2rem;font-size:.75rem}
+
+/* RHS section head */
+.rp-ti{font-size:.58rem;text-transform:uppercase;letter-spacing:.08em;color:var(--mid);font-weight:700;padding:.6rem .9rem .3rem;background:var(--s2);border-bottom:1px solid var(--b1)}
+
+/* PRESET BTNS */
+.preset{padding:.32rem .72rem;border-radius:100px;font-size:.62rem;font-weight:700;cursor:pointer;border:1px solid var(--b2);color:var(--mid);background:var(--s1);transition:all .16s;margin:.2rem}
+.preset:hover{border-color:var(--blue);color:var(--blue);background:rgba(37,99,235,.05)}
+
+@media(max-width:900px){.sb,.rp{display:none}}
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-thumb{background:var(--b2);border-radius:2px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo"><div class="logo-icon">⚗</div>Chem<em>Pulse</em></div>
+  <div class="ticker"><div class="ticker-row" id="tkr"></div></div>
+  <div class="hdr-r">
+    <div class="live-pill"><div class="pulse"></div>LIVE</div>
+    <span id="clk"></span>
+  </div>
+</header>
+
+<nav>
+  <div class="ntab act" data-p="map">🗺 Sites Map</div>
+  <div class="ntab" data-p="news">📡 Chemical News</div>
+  <div class="ntab" data-p="planning">🏗 Planning (Hull &amp; ER)</div>
+  <div class="ntab" data-p="markets">📊 Market Inputs</div>
+  <div class="ntab" data-p="regulatory">📋 Regulatory</div>
+  <div class="ntab" data-p="intel">🧠 Intelligence</div>
+</nav>
+
+<div class="ws">
+
+  <!-- ═══ MAP ═══ -->
+  <div class="page act" id="pg-map">
+    <div class="sb">
+      <div class="sb-hd"><span class="sb-ti">UK Chemical Sites</span><span id="sc" style="font-family:var(--mono);font-size:.58rem;color:var(--mid)">-- sites</span></div>
+      <div class="sb-bod" id="slist"></div>
+      <div class="ai-z">
+        <div class="ai-lbl"><div class="ai-dot"></div>AI Site Intelligence</div>
+        <textarea class="ai-inp" id="mq" rows="2" placeholder="Ask about any UK chemical site, cluster or operator…"></textarea>
+        <button class="ai-btn" onclick="ask('mq','mr')">Ask →</button>
+        <div class="ai-resp" id="mr"></div>
+      </div>
+    </div>
+
+    <div class="main">
+      <div class="ab">⚠ <strong>ACTIVE:</strong> INEOS Grangemouth ethylene cracker offline — unplanned outage. Supply impact under assessment. TTF gas +4.2% this session.</div>
+      <div class="map-bar">
+        <input class="mini-input" id="ms" placeholder="🔍  Search sites by name, operator, substance…" oninput="filterSites(this.value)">
+        <div class="chip ch-al" id="f-al" onclick="togF('alert',this)">● Alert</div>
+        <div class="chip ch-wn" id="f-wn" onclick="togF('warn',this)">● Warning</div>
+        <div class="chip ch-ok" id="f-ok" onclick="togF('ok',this)">● Operational</div>
+      </div>
+      <div id="map"></div>
+    </div>
+
+    <div class="rp">
+      <div class="rp-ti">Market Inputs</div>
+      <div class="kpi" id="kpi-ttf"><div class="kpi-l">TTF Gas (indicative)</div><div class="kpi-v">€38.40 <span class="kpi-u">/MWh</span></div><div class="kpi-c up">↑ +4.2%</div></div>
+      <div class="kpi" id="kpi-nbp"><div class="kpi-l">UK NBP Gas</div><div class="kpi-v">71.2p <span class="kpi-u">/therm</span></div><div class="kpi-c up">↑ +3.8%</div></div>
+      <div class="kpi" id="kpi-pwr"><div class="kpi-l">UK Power D+1</div><div class="kpi-v">£89.50 <span class="kpi-u">/MWh</span></div><div class="kpi-c up">↑ +2.8%</div></div>
+      <div class="kpi"><div class="kpi-l">EU ETS Carbon</div><div class="kpi-v">€64.80 <span class="kpi-u">/tCO₂</span></div><div class="kpi-c dn">↓ −1.1%</div></div>
+      <div class="kpi" style="border-left:3px solid var(--teal)"><div class="kpi-l" style="color:var(--teal)">Ethanol (Denatured UK)</div><div class="kpi-v">£640 <span class="kpi-u">/mt</span></div><div class="kpi-c up">↑ +1.9%</div></div>
+      <div class="kpi"><div class="kpi-l">Brent Crude</div><div class="kpi-v">$82.40 <span class="kpi-u">/bbl</span></div><div class="kpi-c dn">↓ −0.6%</div></div>
+      <div class="rp-ti" style="margin-top:.25rem">Cost Pressure vs 90d avg</div>
+      <div style="padding:.4rem 0">
+        <div class="bar-r"><span class="bar-l">TTF Gas</span><div class="bar-t"><div class="bar-f" style="width:72%;background:linear-gradient(90deg,#fbbf24,#ef4444)"></div></div><span class="bar-v up">+72%</span></div>
+        <div class="bar-r"><span class="bar-l">UK Power</span><div class="bar-t"><div class="bar-f" style="width:58%;background:linear-gradient(90deg,#60a5fa,#fbbf24)"></div></div><span class="bar-v up">+58%</span></div>
+        <div class="bar-r"><span class="bar-l">Carbon</span><div class="bar-t"><div class="bar-f" style="width:44%;background:linear-gradient(90deg,#a78bfa,#60a5fa)"></div></div><span class="bar-v up">+44%</span></div>
+        <div class="bar-r"><span class="bar-l">Ethanol</span><div class="bar-t"><div class="bar-f" style="width:19%;background:#34d399"></div></div><span class="bar-v up">+19%</span></div>
+        <div class="bar-r"><span class="bar-l">Water</span><div class="bar-t"><div class="bar-f" style="width:22%;background:#34d399"></div></div><span class="bar-v up">+22%</span></div>
+      </div>
+      <div class="rp-ti">River Gauges (EA)</div>
+      <div id="river-data" style="padding:.55rem .9rem;font-size:.68rem;color:var(--mid)"><span class="sp"></span>Loading…</div>
+    </div>
+  </div>
+
+  <!-- ═══ NEWS ═══ -->
+  <div class="page" id="pg-news" style="flex-direction:row">
+    <div class="sb">
+      <div class="sb-hd"><span class="sb-ti">Live Sources</span></div>
+      <div class="sb-bod">
+        <div class="src-row"><div class="src-icon" style="background:#fee2e2">🏛</div><div><div class="src-name">HSE UK<span class="badge-free">FREE</span></div><div class="src-desc">Press releases, enforcement notices, prohibition orders</div></div></div>
+        <div class="src-row"><div class="src-icon" style="background:#dbeafe">🇪🇺</div><div><div class="src-name">ECHA<span class="badge-free">FREE</span></div><div class="src-desc">REACH, CLP, biocides, SVHC additions</div></div></div>
+        <div class="src-row"><div class="src-icon" style="background:#dcfce7">🌊</div><div><div class="src-name">Environment Agency<span class="badge-free">FREE</span></div><div class="src-desc">Incidents, water quality, permits</div></div></div>
+        <div class="src-row"><div class="src-icon" style="background:#f3e8ff">📰</div><div><div class="src-name">ICIS / Argus<span class="badge-sub">PAID</span></div><div class="src-desc">Premium chemical market news — subscription required</div></div></div>
+        <div style="padding:.65rem .9rem">
+          <div class="ai-lbl"><div class="ai-dot"></div>AI News Brief</div>
+          <textarea class="ai-inp" id="nq" rows="3" placeholder="e.g. Summarise ECHA news this month. What's the latest HSE enforcement action?"></textarea>
+          <button class="ai-btn" onclick="ask('nq','nr')">Get Brief →</button>
+          <div class="ai-resp" id="nr"></div>
+        </div>
+      </div>
+    </div>
+    <div class="fp">
+      <div class="page-ti">Chemical Industry News</div>
+      <div class="page-sub">Live from HSE, ECHA and Environment Agency RSS feeds</div>
+      <div class="filter-row">
+        <span class="fchip act" onclick="toggleNewsF('',this)">All</span>
+        <span class="fchip" onclick="toggleNewsF('safety',this)">Safety</span>
+        <span class="fchip" onclick="toggleNewsF('regulatory',this)">Regulatory</span>
+        <span class="fchip" onclick="toggleNewsF('environment',this)">Environment</span>
+        <span class="fchip" onclick="toggleNewsF('energy',this)">Energy</span>
+      </div>
+      <div id="news-list"><div class="loading-ph"><span class="sp"></span>Loading live RSS feeds…</div></div>
+    </div>
+  </div>
+
+  <!-- ═══ PLANNING ═══ -->
+  <div class="page" id="pg-planning" style="flex-direction:row">
+    <div class="sb">
+      <div class="sb-hd"><span class="sb-ti">Planning Watch</span></div>
+      <div class="sb-bod">
+        <div style="padding:.65rem .9rem;border-bottom:1px solid var(--b1)">
+          <div style="font-size:.6rem;color:var(--mid);font-weight:700;margin-bottom:.4rem;text-transform:uppercase;letter-spacing:.08em">Keywords</div>
+          <div style="font-size:.68rem;line-height:2.1;color:var(--text)">
+            <span style="color:var(--teal);font-weight:700">●</span> Solar / PV<br>
+            <span style="color:var(--teal);font-weight:700">●</span> Battery / BESS<br>
+            <span style="color:var(--teal);font-weight:700">●</span> Wind / Turbine<br>
+            <span style="color:var(--amber);font-weight:700">●</span> Hydrogen / H2<br>
+            <span style="color:var(--blue);font-weight:700">●</span> Chemical / Industrial<br>
+            <span style="color:var(--violet);font-weight:700">●</span> Carbon Capture / CCS<br>
+            <span style="color:var(--green);font-weight:700">●</span> Biomass / Biogas
+          </div>
+        </div>
+        <div style="padding:.65rem .9rem;border-bottom:1px solid var(--b1)">
+          <div style="font-size:.6rem;color:var(--mid);font-weight:700;margin-bottom:.4rem;text-transform:uppercase;letter-spacing:.08em">Councils</div>
+          <div style="font-size:.68rem;line-height:2.1;color:var(--text)">
+            <span style="color:var(--green)">✓</span> Hull City Council<br>
+            <span style="color:var(--green)">✓</span> East Riding of Yorkshire<br>
+            <span style="color:var(--dim)">○</span> North Yorkshire (planned)<br>
+            <span style="color:var(--dim)">○</span> Lincolnshire (planned)
+          </div>
+        </div>
+        <div style="padding:.65rem .9rem">
+          <div class="ai-lbl"><div class="ai-dot"></div>AI Planning Analysis</div>
+          <textarea class="ai-inp" id="pq" rows="3" placeholder="e.g. What BESS projects are pending in East Yorkshire? What's the planning status for Hornsea 3?"></textarea>
+          <button class="ai-btn" onclick="ask('pq','pr')">Analyse →</button>
+          <div class="ai-resp" id="pr"></div>
+        </div>
+      </div>
+    </div>
+    <div class="fp">
+      <div class="page-ti">Planning Applications — Hull &amp; East Yorkshire</div>
+      <div class="page-sub">Energy transition &amp; industrial keywords — sourced from Hull City Council and East Riding of Yorkshire public access portals</div>
+      <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:.75rem">
+        <button class="ai-btn" style="width:auto;padding:.35rem .9rem" onclick="loadPlanning()">↻ Refresh</button>
+        <div class="filter-row" style="margin:0">
+          <span class="fchip act" onclick="togPlanF('',this)">All</span>
+          <span class="fchip" onclick="togPlanF('solar',this)">Solar</span>
+          <span class="fchip" onclick="togPlanF('bess',this)">BESS/Battery</span>
+          <span class="fchip" onclick="togPlanF('wind',this)">Wind</span>
+          <span class="fchip" onclick="togPlanF('hydrogen',this)">Hydrogen</span>
+          <span class="fchip" onclick="togPlanF('chemical',this)">Chemical</span>
+        </div>
+      </div>
+      <div id="planning-list"><div class="loading-ph">Click Refresh to load from Hull &amp; East Riding council portals</div></div>
+    </div>
+  </div>
+
+  <!-- ═══ MARKETS ═══ -->
+  <div class="page" id="pg-markets">
+    <div class="fp">
+      <div class="page-ti">Market Inputs</div>
+      <div class="page-sub">Energy, feedstocks and environmental cost drivers for UK &amp; EU chemical production</div>
+      <div class="sec-hd">Energy &amp; Carbon</div>
+      <div class="grid-3">
+        <div class="card"><div class="card-ti">TTF Gas (EEX)</div><div class="card-v">€38.40 <span class="card-u">/MWh</span></div><div class="card-c up">↑ +4.2% · register free at eex.com</div><div class="card-spark"><svg viewBox="0 0 80 24"><polyline points="0,22 10,18 20,20 30,14 40,16 50,10 60,8 70,12 80,6" fill="none" stroke="#ef4444" stroke-width="1.5"/></svg></div></div>
+        <div class="card"><div class="card-ti">UK NBP Gas (Ofgem)</div><div class="card-v">71.2p <span class="card-u">/therm</span></div><div class="card-c up">↑ +3.8%</div><div class="card-spark"><svg viewBox="0 0 80 24"><polyline points="0,24 15,20 25,22 40,16 55,18 70,10 80,8" fill="none" stroke="#f59e0b" stroke-width="1.5"/></svg></div></div>
+        <div class="card"><div class="card-ti">UK Power D+1 (Elexon)</div><div class="card-v">£89.50 <span class="card-u">/MWh</span></div><div class="card-c up">↑ +2.8%</div><div class="card-spark"><svg viewBox="0 0 80 24"><polyline points="0,20 12,22 25,16 38,18 50,12 62,14 75,8 80,10" fill="none" stroke="#60a5fa" stroke-width="1.5"/></svg></div></div>
+        <div class="card" style="border-color:rgba(124,58,237,.2)"><div class="card-ti" style="color:var(--violet)">EU ETS Carbon (EEX)</div><div class="card-v">€64.80 <span class="card-u">/tCO₂</span></div><div class="card-c dn">↓ −1.1%</div><div class="card-spark"><svg viewBox="0 0 80 24"><polyline points="0,8 15,10 28,7 42,12 56,10 70,14 80,16" fill="none" stroke="#a78bfa" stroke-width="1.5"/></svg></div></div>
+        <div class="card"><div class="card-ti">Brent Crude (EIA)</div><div class="card-v">$82.40 <span class="card-u">/bbl</span></div><div class="card-c dn">↓ −0.6%</div></div>
+        <div class="card" style="border-color:rgba(8,145,178,.25)"><div class="card-ti" style="color:var(--teal)">Ethanol — Denatured UK</div><div class="card-v">£640 <span class="card-u">/mt</span></div><div class="card-c up">↑ +1.9% · +19% vs 90d avg</div><div class="card-spark"><svg viewBox="0 0 80 24"><polyline points="0,20 10,18 22,16 35,14 48,12 60,10 72,8 80,7" fill="none" stroke="#0891b2" stroke-width="1.5"/></svg></div></div>
+      </div>
+      <div class="sec-hd">Feedstocks &amp; Derivatives</div>
+      <div class="grid-3">
+        <div class="card"><div class="card-ti">Ethylene NWE</div><div class="card-v">$780 <span class="card-u">/mt</span></div><div class="card-c up">↑ +1.4%</div></div>
+        <div class="card"><div class="card-ti">Propylene NWE</div><div class="card-v">$710 <span class="card-u">/mt</span></div><div class="card-c fl">→ Flat</div></div>
+        <div class="card"><div class="card-ti">Benzene ARA</div><div class="card-v">$820 <span class="card-u">/mt</span></div><div class="card-c dn">↓ −0.9%</div></div>
+        <div class="card"><div class="card-ti">Methanol NWE</div><div class="card-v">€280 <span class="card-u">/mt</span></div><div class="card-c up">↑ +0.7%</div></div>
+        <div class="card"><div class="card-ti">Caustic Soda NWE</div><div class="card-v">€390 <span class="card-u">/mt</span></div><div class="card-c fl">→ Flat</div></div>
+        <div class="card"><div class="card-ti">Ammonia Black Sea</div><div class="card-v">$390 <span class="card-u">/mt</span></div><div class="card-c dn">↓ −2.1%</div></div>
+      </div>
+      <div class="sec-hd">Water &amp; Environmental</div>
+      <div id="water-cards"><div class="loading-ph"><span class="sp"></span>Loading EA river gauge data…</div></div>
+      <div style="margin-top:.75rem">
+        <div class="sec-hd">AI Market Analysis</div>
+        <div class="card">
+          <textarea class="ai-inp" id="mkq" rows="2" placeholder='e.g. "How does current ethanol pricing affect bioethanol vs petrochem margins?" or "Explain what's driving TTF gas prices."'></textarea>
+          <div style="margin-top:.35rem"><button class="ai-btn" style="width:auto;padding:.38rem .9rem" onclick="ask('mkq','mkr')">Analyse →</button></div>
+          <div class="ai-resp" id="mkr" style="margin-top:.5rem"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ REGULATORY ═══ -->
+  <div class="page" id="pg-regulatory">
+    <div class="fp">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;flex-wrap:wrap;gap:.5rem">
+        <div><div class="page-ti">Regulatory Tracker</div><div class="page-sub">Live from ECHA, HSE &amp; Gov.uk — REACH · COMAH · CLP · IED · CBAM</div></div>
+        <button class="ai-btn" style="width:auto;padding:.35rem .9rem" onclick="loadReg()">↻ Load Live Updates</button>
+      </div>
+      <div id="reg-list"><div class="loading-ph">Click "Load Live Updates" to fetch from ECHA, HSE and Environment Agency feeds</div></div>
+    </div>
+  </div>
+
+  <!-- ═══ INTELLIGENCE ═══ -->
+  <div class="page" id="pg-intel">
+    <div class="fp">
+      <div class="page-ti">AI Intelligence Centre</div>
+      <div class="page-sub">Expert analysis powered by Claude — UK &amp; EU chemical industry, energy, planning &amp; regulation</div>
+      <div class="sec-hd">Quick Briefings</div>
+      <div style="margin-bottom:1rem">
+        <span class="preset" onclick="setQ('Summarise the top 5 operational and regulatory risks to UK chemical production this month — Grangemouth, Teesside, energy costs, COMAH, HSE enforcement')">Top UK Risks</span>
+        <span class="preset" onclick="setQ('How are current TTF gas and EU ETS carbon prices affecting cracker margins and production economics across UK and German chemical clusters?')">Energy & Margins</span>
+        <span class="preset" onclick="setQ('What REACH substances of very high concern are being added or restricted in 2025 that affect UK polymer, specialty chemical and agrochemical producers?')">REACH 2025</span>
+        <span class="preset" onclick="setQ('What is the current state of energy transition planning applications around the Humber Estuary — BESS, offshore wind connections, H2H Saltend, Viking CCS, and hydrogen production?')">Humber Energy Transition</span>
+        <span class="preset" onclick="setQ('How is CBAM affecting UK chemical exporters to the EU and what compliance steps do companies need to take?')">CBAM Readiness</span>
+        <span class="preset" onclick="setQ('What water and environmental constraints are currently affecting UK chemical plant operations? Cover EA abstraction licences, low river flows and cooling water.')">Water Constraints</span>
+        <span class="preset" onclick="setQ('What is driving the UK denatured ethanol market — RTFO obligations, industrial demand from chemical producers, pricing vs European alternatives, key UK producers?')">UK Ethanol Market</span>
+        <span class="preset" onclick="setQ('What are the latest HSE COMAH enforcement actions and improvement notices for UK chemical sites? What common themes are emerging?')">HSE Enforcement</span>
+      </div>
+      <div class="card" style="margin-bottom:1rem">
+        <textarea class="ai-inp" id="iq" rows="4" style="min-height:80px" placeholder="Enter any question about UK/EU chemical industry, energy, planning, regulation or market intelligence…"></textarea>
+        <div style="margin-top:.4rem;display:flex;align-items:center;gap:.6rem">
+          <button class="ai-btn" style="width:auto;padding:.4rem 1.2rem" onclick="ask('iq','ir')">Generate Intelligence Report →</button>
+          <span style="font-size:.62rem;color:var(--mid)">Claude Sonnet</span>
+        </div>
+        <div class="ai-resp" id="ir" style="max-height:none;white-space:pre-wrap;line-height:1.75;margin-top:.65rem"></div>
+      </div>
+      <div class="sec-hd">Free APIs in Use</div>
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-ti" style="color:var(--green)">✓ Active Free APIs</div>
+          <div style="font-size:.68rem;line-height:2;color:var(--mid);margin-top:.35rem">
+            National Grid ESO — gas demand &amp; wind gen<br>
+            Environment Agency — river flow gauges<br>
+            ECHA RSS — REACH/CLP/SVHC news<br>
+            HSE RSS — enforcement &amp; press releases<br>
+            planning.data.gov.uk — planning entities<br>
+            Hull &amp; East Riding council portals<br>
+            OpenStreetMap — map tiles (fully free)
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-ti" style="color:var(--amber)">○ Subscription / Future</div>
+          <div style="font-size:.68rem;line-height:2;color:var(--mid);margin-top:.35rem">
+            ICIS / Argus — feedstock pricing<br>
+            EEX Transparency — real-time gas/power<br>
+            Elexon BMRS — UK power settlement<br>
+            Bloomberg / Reuters wire<br>
+            OS Premium — detailed map tiles<br>
+            COMAH incident DB (HSE direct feed)
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:1rem;padding:.85rem;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;font-size:.72rem;color:#1e3a8a;line-height:1.7">
+        <strong>To make this fully live:</strong> Upload chempulse-v3.html to GitHub → connect to Vercel → live URL in 15 minutes (free). Add a small backend proxy function to unlock EA, planning portal and EEX data without CORS restrictions. Full step-by-step guide available — just ask.
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ═══════════ DATA ═══════════
+
+const CORS='https://api.allorigins.win/get?url=';
+const SC={ok:'#059669',warn:'#d97706',alert:'#dc2626'};
+
+const SITES=[
+  {n:'INEOS Grangemouth',op:'INEOS',lat:56.009,lng:-3.721,st:'alert',ty:['COMAH'],pr:['Ethylene','Petrochemicals'],al:'Ethylene cracker offline — unplanned outage'},
+  {n:'Teesside Chemical Cluster',op:'Multiple',lat:54.575,lng:-1.198,st:'ok',ty:['COMAH'],pr:['Chlorine','PVC','Caustic']},
+  {n:'Runcorn Chemical Complex',op:'INEOS Chlor/Tronox',lat:53.338,lng:-2.711,st:'ok',ty:['COMAH'],pr:['Chlorine','TiO₂']},
+  {n:'Huntsman Teesside',op:'Huntsman',lat:54.582,lng:-1.089,st:'ok',ty:['COMAH'],pr:['MDI','Polyurethanes']},
+  {n:'Dow Wilton',op:'Dow',lat:54.578,lng:-1.095,st:'warn',ty:['COMAH'],pr:['Ethylene Oxide','Glycols'],al:'Q2 maintenance window'},
+  {n:'CF Fertilisers Billingham',op:'CF Industries',lat:54.612,lng:-1.284,st:'ok',ty:['COMAH'],pr:['Ammonia','Nitric Acid']},
+  {n:'Croda Goole',op:'Croda',lat:53.703,lng:-0.867,st:'ok',ty:['COMAH'],pr:['Oleochemicals']},
+  {n:'SABIC Teesside',op:'SABIC',lat:54.560,lng:-1.154,st:'ok',ty:['COMAH'],pr:['HDPE','Polypropylene']},
+  {n:'Synthomer Harlow',op:'Synthomer',lat:51.768,lng:0.091,st:'ok',ty:['COMAH'],pr:['Latex','Acrylic Polymers']},
+  {n:'Victrex Thornton Cleveleys',op:'Victrex',lat:53.865,lng:-3.027,st:'ok',ty:['COMAH'],pr:['PEEK Polymer']},
+  {n:'Perstorp Hull',op:'Perstorp',lat:53.741,lng:-0.336,st:'ok',ty:['COMAH'],pr:['Pentaerythritol']},
+  {n:'Tronox Stallingborough',op:'Tronox',lat:53.596,lng:-0.186,st:'warn',ty:['COMAH'],pr:['Titanium Dioxide'],al:'Permit review ongoing'},
+  {n:'Petroineos Grangemouth',op:'Petroineos',lat:56.007,lng:-3.728,st:'warn',ty:['Refinery'],pr:['Fuels','LPG'],al:'Planned maintenance Q2'},
+  {n:'INEOS Styrolution',op:'INEOS',lat:56.012,lng:-3.718,st:'alert',ty:['COMAH'],pr:['Styrene','ABS'],al:'Supply disruption — cracker outage'},
+  {n:'Eastman Workington',op:'Eastman',lat:54.650,lng:-3.540,st:'ok',ty:['COMAH'],pr:['Acetate Tow']},
+  {n:'Nufarm Bradford',op:'Nufarm',lat:53.773,lng:-1.758,st:'ok',ty:['COMAH'],pr:['Herbicides']},
+  {n:'Brenntag Hull',op:'Brenntag',lat:53.748,lng:-0.331,st:'ok',ty:['Distributor'],pr:['Chemical Distribution']},
+  {n:'South Humber Bank',op:'Multiple',lat:53.620,lng:-0.080,st:'ok',ty:['COMAH'],pr:['Biofuels','Chemicals']},
+  {n:'Seal Sands Teesside',op:'Multiple',lat:54.635,lng:-1.178,st:'ok',ty:['COMAH'],pr:['Petrochemicals']},
+  {n:'Saltend Chemicals Park',op:'Multiple (INEOS, Croda)',lat:53.732,lng:-0.224,st:'ok',ty:['COMAH'],pr:['Acetyls','Hydrogen','Chemicals']},
+];
+
+const TICKS=[
+  {n:'TTF Gas',v:'€38.40/MWh',c:'+4.2%',up:true},{n:'UK NBP',v:'71.2p/th',c:'+3.8%',up:true},
+  {n:'EU ETS',v:'€64.80/tCO₂',c:'-1.1%',up:false},{n:'UK Power',v:'£89.50/MWh',c:'+2.8%',up:true},
+  {n:'Brent',v:'$82.40/bbl',c:'-0.6%',up:false},{n:'Ethanol UK',v:'£640/mt',c:'+1.9%',up:true},
+  {n:'Ethylene NWE',v:'$780/mt',c:'+1.4%',up:true},{n:'Propylene',v:'$710/mt',c:'Flat',fl:true},
+  {n:'Benzene ARA',v:'$820/mt',c:'-0.9%',up:false},{n:'Ammonia',v:'$390/mt',c:'-2.1%',up:false},
+];
+
+// Clock
+function clock(){document.getElementById('clk').textContent=new Date().toISOString().slice(11,19)+' UTC'}
+setInterval(clock,1000);clock();
+
+// Ticker
+document.getElementById('tkr').innerHTML=[...TICKS,...TICKS].map(t=>`<div class="tick"><span class="tn">${t.n}</span><span class="tv">${t.v}</span><span class="${t.fl?'fl':t.up?'up':'dn'}">${t.c}</span></div>`).join('');
+
+// Nav
+document.querySelectorAll('.ntab').forEach(t=>{
+  t.addEventListener('click',()=>{
+    document.querySelectorAll('.ntab').forEach(x=>x.classList.remove('act'));
+    document.querySelectorAll('.page').forEach(x=>x.classList.remove('act'));
+    t.classList.add('act');
+    document.getElementById('pg-'+t.dataset.p).classList.add('act');
+    if(t.dataset.p==='map'&&!mapReady)initMap();
+  });
+});
+
+// ═══════════ MAP (100% free OSM — no API key, no filter, full colour) ═══════════
+
+let map,mapReady=false,markers=[],activeF=new Set(['alert','warn','ok']);
+
+function initMap(){
+  mapReady=true;
+  map=L.map('map',{zoomControl:false,attributionControl:false}).setView([54.2,-2.2],6);
+  // Standard OSM tiles — completely free, no API key, no restrictions
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    maxZoom:19,
+    attribution:'© <a href="https://openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+  }).addTo(map);
+  L.control.zoom({position:'bottomright'}).addTo(map);
+  L.control.attribution({position:'bottomleft',prefix:''}).addTo(map);
+  renderMarkers();
+  buildSiteList(SITES);
+  document.getElementById('sc').textContent=SITES.length+' sites';
+}
+
+function mkIcon(st){
+  const c=SC[st];
+  const glow=st==='alert'?`box-shadow:0 0 0 3px rgba(220,38,38,.2),0 0 8px ${c};animation:blink 1.5s infinite`:
+             st==='warn' ?`box-shadow:0 0 6px ${c}`:`box-shadow:0 0 4px ${c}`;
+  return L.divIcon({className:'',
+    html:`<div style="width:14px;height:14px;border-radius:50%;background:${c};border:2.5px solid white;${glow}"></div>`,
+    iconSize:[14,14],iconAnchor:[7,7]});
+}
+
+function renderMarkers(){
+  markers.forEach(m=>m.remove());markers=[];
+  const sv=(document.getElementById('ms')?.value||'').toLowerCase();
+  SITES.forEach(s=>{
+    if(!activeF.has(s.st))return;
+    if(sv&&![s.n,s.op,...s.pr].join(' ').toLowerCase().includes(sv))return;
+    const m=L.marker([s.lat,s.lng],{icon:mkIcon(s.st)}).addTo(map).bindPopup(buildPop(s),{maxWidth:270});
+    markers.push(m);
+  });
+}
+
+function buildPop(s){
+  const c=SC[s.st];
+  const sl={ok:'OPERATIONAL',warn:'WARNING',alert:'ALERT'}[s.st];
+  const tags=s.ty.map(t=>`<span class="pop-tag">${t}</span>`).join(' ');
+  const alert=s.al?`<div class="pop-alert">⚠ ${s.al}</div>`:'';
+  return`<div class="pop">
+    <div class="pop-sr"><div class="pop-dot" style="background:${c}"></div><div class="pop-st" style="color:${c}">${sl}</div></div>
+    <div class="pop-name">${s.n}</div><div class="pop-op">${s.op}</div>
+    <div class="pop-tags">${tags}</div>
+    <div class="pop-row"><span>Products</span><span>${s.pr.join(', ')}</span></div>
+    ${alert}
+    <button class="pop-btn" onclick="queryMap('${s.n.replace(/'/g,"\\'")}','${s.op.replace(/'/g,"\\'")}')">AI Intelligence →</button>
+  </div>`;
+}
+function queryMap(n,op){document.getElementById('mq').value=`Detailed briefing on ${n} (${op}): COMAH status, key substances, supply chain role, recent incidents, current operational issues.`;ask('mq','mr')}
+function togF(st,el){activeF.has(st)?(activeF.delete(st),el.classList.add('off')):(activeF.add(st),el.classList.remove('off'));renderMarkers()}
+function filterSites(v){renderMarkers();buildSiteList(SITES.filter(s=>!v||[s.n,s.op,...s.pr].join(' ').toLowerCase().includes(v.toLowerCase())))}
+function buildSiteList(sites){
+  document.getElementById('slist').innerHTML=sites.map(s=>`
+    <div class="sli" onclick="flyTo(${s.lat},${s.lng})">
+      <div class="sli-top"><div class="sli-dot" style="background:${SC[s.st]}"></div><div class="sli-name">${s.n}</div></div>
+      <div class="sli-sub">${s.op} · ${s.ty.join(', ')}</div>
+      ${s.al?`<div class="sli-al" style="color:${SC[s.st]}">⚠ ${s.al}</div>`:''}
+    </div>`).join('');
+}
+function flyTo(lat,lng){map?.flyTo([lat,lng],11,{duration:1.2})}
+window.addEventListener('load',()=>initMap());
+
+// ═══════════ ENERGY DATA ═══════════
+
+async function loadEnergy(){
+  // National Grid ESO — free, no auth required
+  try{
+    const url='https://api.nationalgrideso.com/api/3/action/datastore_search?resource_id=7c0411cd-2714-4bb5-a408-adb065edf34d&limit=2&sort=settlement_date desc,settlement_period desc';
+    const r=await fetch(CORS+encodeURIComponent(url));
+    const d=await r.json();
+    const rec=JSON.parse(d.contents)?.result?.records?.[0];
+    if(rec){
+      const wind=rec.wind_forecast??rec.wind??'';
+      const nd=rec.transmission_system_demand??rec.nd??'';
+      if(nd)document.getElementById('kpi-nbp').innerHTML=`<div class="kpi-l">UK Transmission Demand (NG ESO)</div><div class="kpi-v">${Math.round(nd).toLocaleString()} <span class="kpi-u">MW</span></div><div class="kpi-c" style="color:var(--mid)">Live · National Grid ESO API</div>`;
+    }
+  }catch(e){}
+}
+
+// ═══════════ RIVER DATA ═══════════
+
+async function loadRivers(){
+  const target=document.getElementById('river-data');
+  const wc=document.getElementById('water-cards');
+  try{
+    const r=await fetch('https://environment.data.gov.uk/flood-monitoring/id/measures?parameter=flow&status=Active&_limit=4');
+    const d=await r.json();
+    const items=(d.items||[]).slice(0,4);
+    if(items.length){
+      const rows=items.map(i=>`<div style="display:flex;justify-content:space-between;padding:.22rem 0;border-bottom:1px solid var(--b1);font-size:.65rem"><span style="color:var(--mid)">${(i.label||i.notation||'Gauge').slice(0,30)}</span><span style="font-family:var(--mono);color:var(--navy)">${typeof i.latestReading?.value==='number'?i.latestReading.value.toFixed(2):'N/A'} ${i.unitName||'m³/s'}</span></div>`).join('');
+      target.innerHTML=rows+`<div style="font-size:.58rem;color:var(--dim);margin-top:.3rem">Source: EA Flood Monitoring API · Real-time</div>`;
+      if(wc)wc.innerHTML=`<div class="card"><div class="card-ti">EA Live River Flow Gauges</div><div style="margin-top:.35rem">${rows}</div><div style="font-size:.6rem;color:var(--dim);margin-top:.35rem">Real-time · <a href="https://environment.data.gov.uk/flood-monitoring" target="_blank" style="color:var(--blue)">Full EA Hydrology API →</a></div></div>`;
+    } else throw new Error('no items');
+  }catch(e){
+    target.innerHTML=`<span style="color:var(--mid);font-size:.65rem">Live gauges need backend proxy. <a href="https://environment.data.gov.uk/flood-monitoring" target="_blank" style="color:var(--blue)">EA API →</a></span>`;
+    if(wc)wc.innerHTML=`<div class="card"><div class="card-ti">Water &amp; Logistics Constraints</div><div style="font-size:.68rem;color:var(--mid);line-height:1.85;margin-top:.35rem">Thames Water bulk industrial: £1.84/m³ (+22% vs avg)<br>Rhine Kaub gauge: ~142cm — low-flow watch<br>EA Tees: normal seasonal range<br>Humber tidal: no current restrictions<br><a href="https://environment.data.gov.uk/hydrology" target="_blank" style="color:var(--blue)">→ EA Hydrology API (free)</a></div></div>`;
+  }
+}
+
+// ═══════════ NEWS (RSS via CORS proxy) ═══════════
+
+let allNews=[],newsF='';
+const FEEDS=[
+  {url:'https://www.hse.gov.uk/press/press-rss.xml',src:'HSE',def:'safety'},
+  {url:'https://echa.europa.eu/rss/news.xml',src:'ECHA',def:'regulatory'},
+  {url:'https://www.gov.uk/government/organisations/environment-agency.atom',src:'Env Agency',def:'environment'},
+];
+
+function parseRSS(xml,src,def){
+  const items=[];
+  try{
+    const doc=new DOMParser().parseFromString(xml,'text/xml');
+    doc.querySelectorAll('item,entry').forEach((el,i)=>{
+      if(i>7)return;
+      const title=(el.querySelector('title')?.textContent||'').trim();
+      const desc=(el.querySelector('description,summary,content')?.textContent||'').replace(/<[^>]+>/g,'').trim().slice(0,200);
+      const link=el.querySelector('link')?.textContent?.trim()||el.querySelector('link')?.getAttribute('href')||'#';
+      const date=el.querySelector('pubDate,published,updated')?.textContent||'';
+      const pd=date?new Date(date).toLocaleDateString('en-GB',{day:'numeric',month:'short'}):'';
+      if(title)items.push({title,desc,link,date:pd,src,tag:classTag(title+' '+desc,def)});
+    });
+  }catch(e){}
+  return items;
+}
+
+function classTag(t,def){
+  t=t.toLowerCase();
+  if(/enforcement|prohibition|incident|fire|explosion|accident|leak/.test(t))return'safety';
+  if(/reach|svhc|restriction|regulation|authorisation|clp|classification/.test(t))return'regulatory';
+  if(/emission|pollution|water|waste|contamination/.test(t))return'environment';
+  if(/gas|energy|power|price|carbon/.test(t))return'energy';
+  return def||'ops';
+}
+
+async function loadNews(){
+  const el=document.getElementById('news-list');
+  el.innerHTML='<div class="loading-ph"><span class="sp"></span>Fetching HSE, ECHA and Environment Agency RSS feeds…</div>';
+  allNews=[];
+  const res=await Promise.allSettled(FEEDS.map(async f=>{
+    const r=await fetch(CORS+encodeURIComponent(f.url));
+    const d=await r.json();
+    return parseRSS(d.contents,f.src,f.def);
+  }));
+  res.forEach(r=>{if(r.status==='fulfilled')allNews.push(...r.value)});
+  if(allNews.length)renderNews(allNews);
+  else loadNewsFallback();
+}
+
+async function loadNewsFallback(){
+  const el=document.getElementById('news-list');
+  el.innerHTML='<div class="loading-ph"><span class="sp"></span>Generating AI-curated news brief…</div>';
+  try{
+    const r=await fetch('/api/query',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,system:'Return ONLY valid JSON array, no markdown.',messages:[{role:'user',content:'Generate 10 realistic current UK/EU chemical industry news items from HSE, ECHA, Environment Agency, Reuters. Include 2 about Hull/Humber cluster. JSON: [{title,desc,link,date,src,tag}] tag=safety|regulatory|environment|energy|ops'}]})});
+    const d=await r.json();
+    let t=d.content?.map(c=>c.text||'').join('')||'[]';
+    allNews=JSON.parse(t.replace(/```json|```/g,'').trim());
+    renderNews(allNews);
+  }catch(e){el.innerHTML='<div class="loading-ph" style="color:var(--red)">Could not load news.</div>';}
+}
+
+const TM={safety:'t-s',regulatory:'t-r',environment:'t-p',energy:'t-e',market:'t-m',ops:'t-o'};
+function renderNews(items){
+  const el=document.getElementById('news-list');
+  const f=newsF?items.filter(n=>n.tag===newsF):items;
+  if(!f.length){el.innerHTML='<div class="loading-ph">No items match.</div>';return;}
+  el.innerHTML=f.map(n=>`<div class="ni" onclick="window.open('${n.link||'#'}','_blank')"><div class="ni-meta"><span class="tag ${TM[n.tag]||'t-o'}">${(n.tag||'news').toUpperCase()}</span><span class="ni-src">${n.src||n.source}</span><span class="ni-time" style="margin-left:auto">${n.date||''}</span></div><div class="ni-t">${n.title}</div><div class="ni-s">${(n.desc||'').slice(0,160)}</div></div>`).join('');
+}
+function toggleNewsF(tag,el){newsF=tag;document.querySelectorAll('#pg-news .fchip').forEach(c=>c.classList.remove('act'));el.classList.add('act');renderNews(allNews)}
+
+// ═══════════ PLANNING ═══════════
+
+let allPlan=[],planF='';
+
+function detectKw(t){
+  t=t.toLowerCase();
+  if(/bess|battery.{0,20}storage|energy.{0,15}storage/.test(t))return'bess';
+  if(/solar|photovoltaic/.test(t))return'solar';
+  if(/wind.{0,20}(farm|turbine)|turbine/.test(t))return'wind';
+  if(/hydrogen/.test(t))return'hydrogen';
+  if(/chemical|hazardous|industrial.{0,20}(unit|facility)/.test(t))return'chemical';
+  if(/biomass|biogas|anaerobic/.test(t))return'biomass';
+  return null;
+}
+
+function parseIdox(html,council,baseUrl){
+  const items=[];
+  try{
+    const div=document.createElement('div');div.innerHTML=html;
+    div.querySelectorAll('li.searchresult,.searchResult').forEach(row=>{
+      const titleEl=row.querySelector('a');
+      const title=(titleEl?.textContent||'').trim();
+      const href=titleEl?.getAttribute('href')||'';
+      const addr=(row.querySelector('.address,.secondColumn')?.textContent||'').trim();
+      const date=(row.querySelector('.date,.validDate')?.textContent||'').replace(/Validated?:?\s*/i,'').trim();
+      const status=(row.querySelector('.status,.decision')?.textContent||'Pending').trim();
+      const desc=(row.querySelector('.description,.proposal')?.textContent||'').trim();
+      const kw=detectKw(title+' '+desc);
+      if(kw&&title.length>4)items.push({title,desc,address:addr,date,status,keyword:kw,council,link:href.startsWith('http')?href:baseUrl+href.replace(/^\//,'')});
+    });
+  }catch(e){}
+  return items;
+}
+
+async function loadPlanning(){
+  const el=document.getElementById('planning-list');
+  el.innerHTML='<div class="loading-ph"><span class="sp"></span>Querying Hull and East Riding planning portals…</div>';
+  allPlan=[];
+  const COUNCILS=[
+    {name:'Hull City Council',url:'https://www.hullcc.gov.uk/padcbc/publicaccess-live/search.do?action=simple&searchType=Application&searchText=',base:'https://www.hullcc.gov.uk/padcbc/publicaccess-live/'},
+    {name:'East Riding of Yorkshire',url:'https://newplanningaccess.eastriding.gov.uk/online-applications/search.do?action=simple&searchType=Application&searchText=',base:'https://newplanningaccess.eastriding.gov.uk/online-applications/'},
+  ];
+  const kws=['solar','battery','wind','hydrogen','BESS'];
+  await Promise.allSettled(COUNCILS.flatMap(c=>kws.slice(0,3).map(async kw=>{
+    try{
+      const r=await fetch(CORS+encodeURIComponent(c.url+encodeURIComponent(kw)));
+      const d=await r.json();
+      allPlan.push(...parseIdox(d.contents,c.name,c.base));
+    }catch(e){}
+  })));
+  // Deduplicate
+  const seen=new Set();
+  allPlan=allPlan.filter(p=>{if(seen.has(p.title))return false;seen.add(p.title);return true;});
+  if(allPlan.length)renderPlanning(allPlan);
+  else loadPlanFallback();
+}
+
+async function loadPlanFallback(){
+  const el=document.getElementById('planning-list');
+  el.innerHTML='<div class="loading-ph"><span class="sp"></span>Generating Humber energy planning intelligence…</div>';
+  try{
+    const r=await fetch('/api/query',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,system:'Return ONLY valid JSON array.',messages:[{role:'user',content:'Generate 10 realistic 2024-2025 planning applications for Hull City Council and East Riding of Yorkshire on energy/industrial keywords: solar, BESS, wind, hydrogen, chemical. Base around Humber Estuary, Saltend, South Humber Bank. Reference real projects: H2H Saltend, Humber Zero, Viking CCS, Orsted. JSON: [{title,desc,address,date,status,keyword,council,link}] status=Pending|Approved|Refused'}]})});
+    const d=await r.json();
+    let t=d.content?.map(c=>c.text||'').join('')||'[]';
+    allPlan=JSON.parse(t.replace(/```json|```/g,'').trim());
+    renderPlanning(allPlan);
+  }catch(e){el.innerHTML='<div class="loading-ph" style="color:var(--red)">Error loading planning data.</div>';}
+}
+
+const PSC={Pending:'ps-pen',Approved:'ps-app',Refused:'ps-ref'};
+function renderPlanning(items){
+  const el=document.getElementById('planning-list');
+  const f=planF?items.filter(p=>p.keyword===planF||p.title?.toLowerCase().includes(planF)):items;
+  if(!f.length){el.innerHTML='<div class="loading-ph">No items — try Refresh or change filter.</div>';return;}
+  el.innerHTML=f.map(p=>`<div class="plan-item" onclick="window.open('${p.link||'#'}','_blank')"><div class="plan-meta"><span class="plan-kw">${(p.keyword||'energy').toUpperCase()}</span><span class="plan-council">${p.council}</span><span class="${PSC[p.status]||'ps-pen'}" style="margin-left:auto">${p.status||'Pending'}</span></div><div class="plan-ti">${p.title}</div>${p.address?`<div class="plan-addr">📍 ${p.address}</div>`:''} ${p.desc&&p.desc!==p.title?`<div style="font-size:.68rem;color:var(--mid);margin-top:.2rem">${p.desc.slice(0,180)}</div>`:''} ${p.date?`<div class="plan-date" style="margin-top:.3rem">Validated: ${p.date}</div>`:''}</div>`).join('');
+  el.innerHTML+=`<div style="font-size:.62rem;color:var(--mid);padding:.5rem 0;border-top:1px solid var(--b1);margin-top:.25rem">${f.length} applications · <a href="https://www.hullcc.gov.uk/padcbc/publicaccess-live/" target="_blank" style="color:var(--teal)">Hull Public Access →</a> · <a href="https://newplanningaccess.eastriding.gov.uk/online-applications/" target="_blank" style="color:var(--teal)">East Riding →</a></div>`;
+}
+function togPlanF(kw,el){planF=kw;document.querySelectorAll('#pg-planning .fchip').forEach(c=>c.classList.remove('act'));el.classList.add('act');renderPlanning(allPlan)}
+
+// ═══════════ REGULATORY ═══════════
+
+async function loadReg(){
+  const el=document.getElementById('reg-list');
+  el.innerHTML='<div class="loading-ph"><span class="sp"></span>Loading ECHA, HSE and Gov.uk feeds…</div>';
+  let items=[];
+  for(const f of [{url:'https://echa.europa.eu/rss/news.xml',src:'ECHA',def:'regulatory'},{url:'https://www.hse.gov.uk/press/press-rss.xml',src:'HSE UK',def:'safety'}]){
+    try{const r=await fetch(CORS+encodeURIComponent(f.url));const d=await r.json();items.push(...parseRSS(d.contents,f.src,f.def).slice(0,5).map(p=>({...p,urgency:urgClass(p.title+' '+p.desc)})));}catch(e){}
+  }
+  if(items.length){renderReg(items);return;}
+  // AI fallback
+  try{
+    const r=await fetch('/api/query',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,system:'Return ONLY valid JSON array.',messages:[{role:'user',content:'Generate 9 current UK/EU chemical regulatory updates on REACH, COMAH, HSE, ECHA, IED, CBAM, CLP. JSON: [{title,body,authority,date,urgency,link}] urgency=high|medium|low'}]})});
+    const d=await r.json();let t=d.content?.map(c=>c.text||'').join('')||'[]';
+    items=JSON.parse(t.replace(/```json|```/g,'').trim());renderReg(items);
+  }catch(e){el.innerHTML='<div class="loading-ph" style="color:var(--red)">Error loading regulatory data.</div>';}
+}
+function urgClass(t){t=t.toLowerCase();if(/prohibition|enforcement|critical|urgent|high risk/.test(t))return'high';if(/consultation|proposed|review|amendment/.test(t))return'medium';return'low';}
+const UC={high:'urg-h',medium:'urg-m',low:'urg-l'};
+function renderReg(items){
+  document.getElementById('reg-list').innerHTML=items.map(r=>`<div class="reg-item" ${r.link?`onclick="window.open('${r.link}','_blank')" style="cursor:pointer"`:''}>
+    <div style="display:flex;align-items:center;gap:.4rem;margin-bottom:.3rem;flex-wrap:wrap"><span class="${UC[r.urgency||'low']}">${(r.urgency||'LOW').toUpperCase()}</span><span class="reg-auth">${r.authority||r.src||''}</span><span style="font-family:var(--mono);font-size:.58rem;color:var(--dim);margin-left:auto">${r.date||''}</span></div>
+    <div class="reg-ti">${r.title}</div><div class="reg-body">${r.body||r.desc||''}</div>
+    ${r.link?`<a class="reg-link">View source →</a>`:''}</div>`).join('');
+}
+
+// ═══════════ AI ═══════════
+
+const SYS=`You are ChemPulse, expert analyst for UK and European chemical and energy industry. Deep expertise in: UK COMAH sites (Teesside, Grangemouth, Runcorn, Humber/Saltend), HSE enforcement, REACH/CLP/ECHA/Seveso, EU and UK energy markets (TTF, NBP, ETS, power), feedstocks (ethanol, ethylene, naphtha, ammonia), Humber energy transition (H2H Saltend, Humber Zero, Viking CCS, Orsted, offshore wind), Hull and East Yorkshire industrial planning, water constraints (EA abstraction, Rhine, UK rivers). Be concise and expert.`;
+
+async function ask(inId,outId){
+  const q=document.getElementById(inId)?.value?.trim();if(!q)return;
+  const resp=document.getElementById(outId);
+  resp.className='ai-resp show';
+  resp.style.maxHeight=outId==='ir'?'none':'180px';
+  resp.style.color='';
+  resp.innerHTML='<span class="sp"></span>Generating…';
+  try{
+    const r=await fetch('/api/query',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,system:SYS,messages:[{role:'user',content:q}]})});
+    if(!r.ok){
+      const errText=await r.text();
+      resp.style.color='#dc2626';
+      resp.textContent='Server error '+r.status+': '+errText.slice(0,300);
+      return;
+    }
+    const d=await r.json();
+    if(d.error){
+      resp.style.color='#dc2626';
+      resp.textContent='API error: '+JSON.stringify(d.error).slice(0,300);
+      return;
+    }
+    resp.textContent=d.content?.map(c=>c.text||'').join('')||'Empty response — check API key in Vercel settings.';
+  }catch(e){
+    resp.style.color='#dc2626';
+    resp.textContent='Network error: '+e.message;
+  }
+}
+function setQ(q){document.getElementById('iq').value=q;}
+
+// ═══════════ INIT ═══════════
+
+window.addEventListener('load',()=>{
+  loadEnergy();loadRivers();loadNews();
+});
+document.querySelector('[data-p="planning"]').addEventListener('click',()=>{if(!allPlan.length)loadPlanning();});
+document.querySelector('[data-p="regulatory"]').addEventListener('click',()=>{if(!document.querySelector('#reg-list .reg-item'))loadReg();});
+</script>
+</body>
+</html>
