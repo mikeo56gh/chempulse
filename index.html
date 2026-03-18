@@ -440,19 +440,22 @@ nav::-webkit-scrollbar{display:none}
   <!-- ═══ CCGT ═══ -->
   <div class="page" id="pg-ccgt">
     <div class="fp" style="flex:1">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem;flex-wrap:wrap;gap:.5rem">
+
+      <!-- Header -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;flex-wrap:wrap;gap:.5rem">
         <div>
-          <div class="page-ti">Saltend CCGT — Live Generation Status</div>
-          <div class="page-sub">Triton Power · 1,197 MW · 3 units · Humber Estuary · Data: Elexon BMRS (free, no key)</div>
+          <div class="page-ti">Saltend CCGT — Generation Status</div>
+          <div class="page-sub">Triton Power · 1,197 MW · 3 units (T_SCCL-1/2/3) · Humber Estuary · Elexon BMRS (free)</div>
         </div>
-        <button class="ai-btn" style="width:auto;padding:.35rem .9rem" onclick="loadCCGT()">↻ Refresh</button>
+        <button class="ai-btn" style="width:auto;padding:.35rem .9rem" onclick="loadCCGT()">↻ Live Refresh</button>
       </div>
 
-      <!-- Status cards row -->
+      <!-- Live status cards -->
+      <div class="sec-hd">Live Status</div>
       <div id="ccgt-units" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.65rem;margin-bottom:1rem">
-        <div class="card"><div class="card-ti">Unit 1 (T_SALTB-1)</div><div style="font-size:.75rem;color:var(--mid)"><span class="sp"></span>Loading…</div></div>
-        <div class="card"><div class="card-ti">Unit 2 (T_SALTB-2)</div><div style="font-size:.75rem;color:var(--mid)"><span class="sp"></span>Loading…</div></div>
-        <div class="card"><div class="card-ti">Unit 3 (T_SALTB-3)</div><div style="font-size:.75rem;color:var(--mid)"><span class="sp"></span>Loading…</div></div>
+        <div class="card"><div class="card-ti">Unit 1 (T_SCCL-1)</div><div style="font-size:.75rem;color:var(--mid)"><span class="sp"></span>Loading…</div></div>
+        <div class="card"><div class="card-ti">Unit 2 (T_SCCL-2)</div><div style="font-size:.75rem;color:var(--mid)"><span class="sp"></span>Loading…</div></div>
+        <div class="card"><div class="card-ti">Unit 3 (T_SCCL-3)</div><div style="font-size:.75rem;color:var(--mid)"><span class="sp"></span>Loading…</div></div>
       </div>
 
       <!-- Plant summary -->
@@ -460,31 +463,90 @@ nav::-webkit-scrollbar{display:none}
         <div style="font-size:.75rem;color:var(--mid);text-align:center;padding:.5rem"><span class="sp"></span>Loading plant summary…</div>
       </div>
 
-      <!-- 24hr chart placeholder -->
+      <!-- 24hr PN chart -->
       <div id="ccgt-chart" class="card" style="margin-bottom:1rem"></div>
 
       <!-- REMIT outages -->
-      <div id="ccgt-remit"></div>
+      <div id="ccgt-remit" style="margin-bottom:1rem"></div>
 
-      <!-- Context -->
-      <div class="card" style="margin-top:.5rem">
-        <div class="card-ti" style="color:var(--teal)">Why Saltend Matters to the Chemical Cluster</div>
-        <div style="font-size:.75rem;color:var(--mid);line-height:1.8;margin-top:.35rem">
-          Saltend Power Station is a combined heat and power (CHP) plant supplying both electricity to the grid and <strong style="color:var(--text)">process steam to Saltend Chemicals Park</strong>. When a unit trips or goes offline, it directly affects:<br>
-          <strong style="color:var(--text)">INEOS Acetyls</strong> — acetic acid &amp; acetic anhydride production (900,000 t/yr)<br>
-          <strong style="color:var(--text)">Croda International</strong> — oleochemicals, requires continuous process heat<br>
-          <strong style="color:var(--text)">BP / INEOS</strong> — ethylene derivatives and ethyl acetate<br>
-          <strong style="color:var(--text)">Nippon Gohsei</strong> — EVOH production (world's largest line)<br><br>
-          Running status also indicates local industrial gas demand and is a proxy for Humber energy cost pressure.
+      <!-- ── HISTORICAL SECTION ── -->
+      <div class="sec-hd">Historical Generation Data (B1610)</div>
+      <div class="card" style="margin-bottom:1rem">
+        <div style="font-size:.72rem;color:var(--mid);margin-bottom:.75rem;line-height:1.5">
+          Actual metered output from Elexon B1610 dataset. Select a date range to see when each unit was running.
+          <span style="color:var(--amber)">Note: B1610 has ~5 working day lag</span> — dates from the last 5 days may show incomplete data. Use PN (live tab above) for recent output.
+        </div>
+
+        <!-- Date range pickers -->
+        <div style="display:flex;align-items:center;gap:.65rem;flex-wrap:wrap;margin-bottom:.75rem">
+          <div style="display:flex;flex-direction:column;gap:.2rem">
+            <label style="font-size:.6rem;text-transform:uppercase;letter-spacing:.07em;color:var(--mid)">From</label>
+            <input type="date" id="hist-from" class="mini-input" style="width:160px;padding:.35rem .65rem" />
+          </div>
+          <div style="display:flex;flex-direction:column;gap:.2rem">
+            <label style="font-size:.6rem;text-transform:uppercase;letter-spacing:.07em;color:var(--mid)">To</label>
+            <input type="date" id="hist-to" class="mini-input" style="width:160px;padding:.35rem .65rem" />
+          </div>
+          <div style="display:flex;gap:.4rem;align-items:flex-end;padding-bottom:1px">
+            <button class="ai-btn" style="width:auto;padding:.35rem .85rem" onclick="loadHistory()">Load History</button>
+            <span class="fchip" onclick="setHistPreset(7,this)">7 days</span>
+            <span class="fchip" onclick="setHistPreset(30,this)">30 days</span>
+            <span class="fchip" onclick="setHistPreset(90,this)">90 days</span>
+          </div>
+        </div>
+
+        <!-- Unit filter chips -->
+        <div style="display:flex;gap:.4rem;margin-bottom:.65rem;flex-wrap:wrap">
+          <span style="font-size:.62rem;color:var(--mid);align-self:center">Show:</span>
+          <span class="fchip act" id="hf-all" onclick="setHistUnit('all',this)">All units combined</span>
+          <span class="fchip" id="hf-1" onclick="setHistUnit('T_SCCL-1',this)">Unit 1</span>
+          <span class="fchip" id="hf-2" onclick="setHistUnit('T_SCCL-2',this)">Unit 2</span>
+          <span class="fchip" id="hf-3" onclick="setHistUnit('T_SCCL-3',this)">Unit 3</span>
+        </div>
+
+        <div id="hist-chart" style="min-height:100px">
+          <div style="text-align:center;color:var(--mid);padding:1.5rem;font-size:.75rem">Select a date range and click Load History</div>
+        </div>
+
+        <!-- Stats row -->
+        <div id="hist-stats" style="display:none;margin-top:.75rem;display:grid;grid-template-columns:repeat(4,1fr);gap:.5rem">
+          <div style="background:var(--s2);border-radius:6px;padding:.6rem .75rem">
+            <div style="font-size:.58rem;text-transform:uppercase;letter-spacing:.08em;color:var(--mid)">Avg Output</div>
+            <div id="hs-avg" style="font-family:var(--mono);font-size:.9rem;font-weight:500;color:var(--navy)">—</div>
+          </div>
+          <div style="background:var(--s2);border-radius:6px;padding:.6rem .75rem">
+            <div style="font-size:.58rem;text-transform:uppercase;letter-spacing:.08em;color:var(--mid)">Peak Output</div>
+            <div id="hs-peak" style="font-family:var(--mono);font-size:.9rem;font-weight:500;color:var(--navy)">—</div>
+          </div>
+          <div style="background:var(--s2);border-radius:6px;padding:.6rem .75rem">
+            <div style="font-size:.58rem;text-transform:uppercase;letter-spacing:.08em;color:var(--mid)">Load Factor</div>
+            <div id="hs-lf" style="font-family:var(--mono);font-size:.9rem;font-weight:500;color:var(--navy)">—</div>
+          </div>
+          <div style="background:var(--s2);border-radius:6px;padding:.6rem .75rem">
+            <div style="font-size:.58rem;text-transform:uppercase;letter-spacing:.08em;color:var(--mid)">Periods &gt;50MW</div>
+            <div id="hs-run" style="font-family:var(--mono);font-size:.9rem;font-weight:500;color:var(--navy)">—</div>
+          </div>
         </div>
       </div>
 
-      <!-- Data source info -->
-      <div style="margin-top:.75rem;padding:.75rem;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;font-size:.72rem;color:#1e3a8a;line-height:1.7">
-        <strong>Data source:</strong> Elexon BMRS API — <code style="font-size:.68rem">data.elexon.co.uk/bmrs/api/v1</code> — completely free, no API key required.<br>
-        <strong>Physical Notifications (PN):</strong> updated every 30 mins, near real-time generation intent.<br>
-        <strong>B1610:</strong> actual reconciled metered output, ~5 working day lag.<br>
-        <strong>REMIT:</strong> mandatory outage notices — planned maintenance and unplanned trips.
+      <!-- Context -->
+      <div class="card" style="margin-bottom:.75rem">
+        <div class="card-ti" style="color:var(--teal)">Why Saltend Matters to the Chemical Cluster</div>
+        <div style="font-size:.75rem;color:var(--mid);line-height:1.8;margin-top:.35rem">
+          Saltend is a CHP plant — it supplies <strong style="color:var(--text)">process steam</strong> as well as electricity. Units going offline affects:<br>
+          <strong style="color:var(--text)">INEOS Acetyls</strong> — acetic acid &amp; acetic anhydride (900,000 t/yr, Europe's largest)<br>
+          <strong style="color:var(--text)">Croda International</strong> — oleochemicals &amp; esters, continuous steam requirement<br>
+          <strong style="color:var(--text)">BP / INEOS</strong> — ethylene derivatives, ethyl acetate<br>
+          <strong style="color:var(--text)">Nippon Gohsei</strong> — EVOH (world's largest single line)<br>
+          Running status is also a direct proxy for Humber industrial gas demand.
+        </div>
+      </div>
+
+      <div style="padding:.75rem;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;font-size:.72rem;color:#1e3a8a;line-height:1.7">
+        <strong>Data:</strong> Elexon BMRS API — <code style="font-size:.68rem">data.elexon.co.uk/bmrs/api/v1</code> — free, no key.<br>
+        <strong>PN (live):</strong> Physical Notifications — 30 min updates, near real-time generation intent.<br>
+        <strong>B1610 (history):</strong> actual reconciled metered output, available from 2015 to ~5 days ago.<br>
+        <strong>REMIT:</strong> mandatory outage notices for planned &amp; unplanned trips.
       </div>
     </div>
   </div>
@@ -1014,7 +1076,7 @@ async function loadCCGT(){
   const summaryEl=document.getElementById('ccgt-summary');
   const chartEl=document.getElementById('ccgt-chart');
   const remitEl=document.getElementById('ccgt-remit');
-  if(unitsEl)unitsEl.innerHTML=[1,2,3].map(n=>`<div class="card"><div class="card-ti">Unit ${n} (T_SALTB-${n})</div><div style="font-size:.75rem;color:var(--mid)"><span class="sp"></span>Loading…</div></div>`).join('');
+  if(unitsEl)unitsEl.innerHTML=[1,2,3].map(n=>`<div class="card"><div class="card-ti">Unit ${n} (T_SCCL-${n})</div><div style="font-size:.75rem;color:var(--mid)"><span class="sp"></span>Loading…</div></div>`).join('');
   try{
     const controller=new AbortController();
     const tid=setTimeout(()=>controller.abort(),10000);
@@ -1028,7 +1090,7 @@ async function loadCCGT(){
     renderCCGTRemit(d,remitEl);
     renderCCGTMini(d,mini);
   }catch(e){
-    const err=`<div style="font-size:.72rem;color:var(--red);padding:.5rem">Error: ${e.message}<br><a href="https://bmrs.elexon.co.uk/balancing-mechanism-bmu-view?bmuId=T_SALTB-1&activeTab=Physical" target="_blank" style="color:var(--teal)">View on BMRS directly →</a></div>`;
+    const err=`<div style="font-size:.72rem;color:var(--red);padding:.5rem">Error: ${e.message}<br><a href="https://bmrs.elexon.co.uk/balancing-mechanism-bmu-view?bmuId=T_SCCL-1&activeTab=Physical" target="_blank" style="color:var(--teal)">View on BMRS directly →</a></div>`;
     if(unitsEl)unitsEl.innerHTML=err;
     if(summaryEl)summaryEl.innerHTML=err;
     if(mini)mini.innerHTML='<span style="color:var(--red);font-size:.65rem;padding:.4rem .9rem;display:block">⚠ Unavailable — <a href="https://bmrs.elexon.co.uk" target="_blank" style="color:var(--teal)">BMRS →</a></span>';
@@ -1078,7 +1140,7 @@ function renderCCGTSummary(d,el){
     <div style="width:${pct}%;height:100%;border-radius:3px;background:${col};transition:width .8s ease"></div></div>
   ${s.note?`<div style="font-size:.7rem;color:var(--mid);margin-top:.4rem">${s.note}</div>`:''}
   ${s.plant_status==='data_unavailable'?`<div style="margin-top:.5rem;font-size:.72rem;color:var(--amber);background:rgba(245,158,11,.08);padding:.5rem .75rem;border-radius:6px;border-left:2px solid var(--amber)">
-    ⚠ PN data not returned for T_SALTB-1/2/3. BMU IDs may differ — <a href="https://bmrs.elexon.co.uk/balancing-mechanism-bmu-view" target="_blank" style="color:var(--teal)">verify on BMRS →</a> then update <code style="font-size:.65rem">api/ccgt.js</code></div>`:''}`;
+    ⚠ PN data not returned for T_SCCL-1/2/3. BMU IDs may differ — <a href="https://bmrs.elexon.co.uk/balancing-mechanism-bmu-view" target="_blank" style="color:var(--teal)">verify on BMRS →</a> then update <code style="font-size:.65rem">api/ccgt.js</code></div>`:''}`;
 }
 
 function renderCCGTChart(d,el){
@@ -1086,7 +1148,7 @@ function renderCCGTChart(d,el){
   const allPN=[];
   d.units.forEach(u=>(u.pn||[]).forEach(p=>allPN.push({time:new Date(p.time),mw:p.mw})));
   if(allPN.length===0){
-    el.innerHTML=`<div class="card-ti">24hr Output (PN)</div><div style="font-size:.72rem;color:var(--mid);padding:.5rem 0">No PN data available. <a href="https://bmrs.elexon.co.uk/balancing-mechanism-bmu-view?bmuId=T_SALTB-1&activeTab=Physical" target="_blank" style="color:var(--teal)">View on BMRS →</a></div>`;
+    el.innerHTML=`<div class="card-ti">24hr Output (PN)</div><div style="font-size:.72rem;color:var(--mid);padding:.5rem 0">No PN data available. <a href="https://bmrs.elexon.co.uk/balancing-mechanism-bmu-view?bmuId=T_SCCL-1&activeTab=Physical" target="_blank" style="color:var(--teal)">View on BMRS →</a></div>`;
     return;
   }
   const buckets={};
@@ -1180,6 +1242,172 @@ function switchToTab(name){
   if(name==='ccgt')loadCCGT();
 }
 
+// ═══════════ CCGT HISTORICAL ═══════════
+
+let histUnit = 'all';
+let histData = null;
+
+function setHistPreset(days, el) {
+  document.querySelectorAll('#pg-ccgt .fchip').forEach(c => c.classList.remove('act'));
+  el.classList.add('act');
+  const to = new Date();
+  const from = new Date(to - days * 86400000);
+  document.getElementById('hist-from').value = from.toISOString().split('T')[0];
+  document.getElementById('hist-to').value   = to.toISOString().split('T')[0];
+}
+
+function setHistUnit(unit, el) {
+  histUnit = unit;
+  document.querySelectorAll('#pg-ccgt [id^="hf-"]').forEach(c => c.classList.remove('act'));
+  el.classList.add('act');
+  if (histData) renderHistChart(histData);
+}
+
+// Set default dates on page load (last 30 days)
+function initHistDates() {
+  const to   = new Date();
+  const from = new Date(to - 30 * 86400000);
+  const toEl   = document.getElementById('hist-to');
+  const fromEl = document.getElementById('hist-from');
+  if (toEl && !toEl.value)   toEl.value   = to.toISOString().split('T')[0];
+  if (fromEl && !fromEl.value) fromEl.value = from.toISOString().split('T')[0];
+}
+
+async function loadHistory() {
+  const fromVal = document.getElementById('hist-from').value;
+  const toVal   = document.getElementById('hist-to').value;
+  if (!fromVal || !toVal) { alert('Please select both From and To dates.'); return; }
+
+  const from = new Date(fromVal);
+  const to   = new Date(toVal);
+  const diffDays = Math.round((to - from) / 86400000);
+  if (diffDays < 0)   { alert('From date must be before To date.'); return; }
+  if (diffDays > 180) { alert('Maximum range is 180 days (Elexon API limit per query).'); return; }
+
+  const el = document.getElementById('hist-chart');
+  el.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--mid);font-size:.75rem"><span class="sp"></span>Fetching B1610 data from Elexon… may take a few seconds for longer ranges</div>';
+  document.getElementById('hist-stats').style.display = 'none';
+
+  try {
+    const url = `/api/ccgt?mode=history&from=${fromVal}&to=${toVal}`;
+    const controller = new AbortController();
+    const tid = setTimeout(() => controller.abort(), 25000); // longer timeout for history
+    const r = await fetch(url, { signal: controller.signal });
+    clearTimeout(tid);
+
+    if (!r.ok) throw new Error('History API ' + r.status);
+    histData = await r.json();
+    renderHistChart(histData);
+
+  } catch (e) {
+    el.innerHTML = `<div style="color:var(--red);font-size:.75rem;padding:.5rem">
+      Error: ${e.message}<br>
+      <a href="https://bmrs.elexon.co.uk/generation-by-fuel-type" target="_blank" style="color:var(--teal)">View on BMRS directly →</a>
+    </div>`;
+  }
+}
+
+function renderHistChart(data) {
+  const el = document.getElementById('hist-chart');
+  if (!data || !data.history) {
+    el.innerHTML = '<div style="color:var(--mid);font-size:.75rem;padding:.5rem">No historical data returned.</div>';
+    return;
+  }
+
+  // Flatten data based on selected unit filter
+  let points = [];
+  if (histUnit === 'all') {
+    // Sum across all units per time bucket
+    const buckets = {};
+    data.history.forEach(u => {
+      (u.readings || []).forEach(r => {
+        const t = r.time;
+        buckets[t] = (buckets[t] || 0) + (r.mw || 0);
+      });
+    });
+    points = Object.entries(buckets).sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([time, mw]) => ({ time, mw }));
+  } else {
+    const unit = data.history.find(u => u.bmu === histUnit);
+    points = unit ? (unit.readings || []).sort((a, b) => a.time.localeCompare(b.time)) : [];
+  }
+
+  if (points.length === 0) {
+    el.innerHTML = `<div style="color:var(--amber);font-size:.75rem;padding:.5rem">
+      No B1610 data found for this range. B1610 has a ~5 working day lag — try dates older than 7 days.<br>
+      <a href="https://bmrs.elexon.co.uk/actual-generation-output-per-generation-unit" target="_blank" style="color:var(--teal)">View B1610 on BMRS →</a>
+    </div>`;
+    return;
+  }
+
+  // Stats
+  const mwValues = points.map(p => p.mw).filter(v => v > 0);
+  const avgMW   = mwValues.length ? Math.round(mwValues.reduce((a, b) => a + b, 0) / mwValues.length) : 0;
+  const peakMW  = mwValues.length ? Math.max(...mwValues) : 0;
+  const maxCap  = histUnit === 'all' ? 1197 : 400;
+  const lf      = maxCap > 0 ? Math.round((avgMW / maxCap) * 100) : 0;
+  const running = points.filter(p => p.mw > 50).length;
+
+  document.getElementById('hs-avg').textContent  = avgMW + ' MW';
+  document.getElementById('hs-peak').textContent = peakMW + ' MW';
+  document.getElementById('hs-lf').textContent   = lf + '%';
+  document.getElementById('hs-run').textContent  = running + ' / ' + points.length;
+  document.getElementById('hist-stats').style.display = 'grid';
+
+  // SVG chart — sample down for large datasets
+  const maxPoints = 200;
+  const step = Math.max(1, Math.floor(points.length / maxPoints));
+  const sampled = points.filter((_, i) => i % step === 0);
+
+  const svgW = 640, svgH = 120, padL = 48, padR = 12, padT = 12, padB = 28;
+  const w = svgW - padL - padR;
+  const h = svgH - padT - padB;
+  const maxMW = Math.max(...sampled.map(p => p.mw), 1);
+
+  const pts = sampled.map((p, i) => {
+    const x = padL + (i / Math.max(sampled.length - 1, 1)) * w;
+    const y = padT + h - ((p.mw || 0) / maxMW) * h;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+
+  // X axis labels — pick ~6 evenly spaced dates
+  const labelCount = Math.min(6, sampled.length);
+  const labelStep  = Math.floor(sampled.length / labelCount);
+  const xLabels = sampled
+    .filter((_, i) => i % labelStep === 0 || i === sampled.length - 1)
+    .map((p, li) => {
+      const i = sampled.findIndex(s => s.time === p.time);
+      const x = padL + (i / Math.max(sampled.length - 1, 1)) * w;
+      const d = new Date(p.time);
+      const lbl = isNaN(d) ? '' : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+      return `<text x="${x.toFixed(1)}" y="${svgH - 6}" text-anchor="middle" style="font-size:9px;fill:var(--mid)">${lbl}</text>`;
+    }).join('');
+
+  // Y axis labels
+  const yLabels = [0, Math.round(maxMW / 2), maxMW].map(v => {
+    const y = padT + h - (v / maxMW) * h;
+    return `<text x="${padL - 4}" y="${y.toFixed(1)}" text-anchor="end" dominant-baseline="central" style="font-size:9px;fill:var(--mid)">${v}</text>`;
+  }).join('');
+
+  // Color based on unit selection
+  const lineColor = histUnit === 'all' ? 'var(--teal)' : histUnit.endsWith('-1') ? '#2563eb' : histUnit.endsWith('-2') ? '#7c3aed' : '#059669';
+
+  const unitLabel = histUnit === 'all' ? 'All units combined (MW)' : `${histUnit} (MW)`;
+  const dateRange = `${document.getElementById('hist-from').value} → ${document.getElementById('hist-to').value}`;
+
+  el.innerHTML = `
+    <div class="card-ti">${unitLabel} · ${dateRange} · ${points.length} settlement periods · B1610</div>
+    <svg viewBox="0 0 ${svgW} ${svgH}" width="100%" style="margin-top:.35rem;overflow:visible">
+      <text x="${padL}" y="${padT - 2}" style="font-size:9px;fill:var(--mid)">MW</text>
+      ${yLabels}
+      ${xLabels}
+      <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${padT+h}" stroke="var(--b1)" stroke-width="0.5"/>
+      <line x1="${padL}" y1="${padT+h}" x2="${padL+w}" y2="${padT+h}" stroke="var(--b1)" stroke-width="0.5"/>
+      <polyline points="${padL},${padT+h} ${pts} ${padL+w},${padT+h}" fill="${lineColor}" fill-opacity="0.08" stroke="none"/>
+      <polyline points="${pts}" fill="none" stroke="${lineColor}" stroke-width="1.2" stroke-linejoin="round"/>
+    </svg>`;
+}
+
 // ═══════════ INIT ═══════════
 
 window.addEventListener('load',()=>{
@@ -1187,10 +1415,11 @@ window.addEventListener('load',()=>{
   loadEnergy();
   loadRivers();
   loadNews();
+  initHistDates(); // set default date range for CCGT history
 });
 document.querySelector('[data-p="planning"]').addEventListener('click',()=>{if(!allPlan.length)loadPlanning();});
 document.querySelector('[data-p="regulatory"]').addEventListener('click',()=>{if(!document.querySelector('#reg-list .reg-item'))loadReg();});
-document.querySelector('[data-p="ccgt"]').addEventListener('click',()=>{loadCCGT();});
+document.querySelector('[data-p="ccgt"]').addEventListener('click',()=>{loadCCGT();initHistDates();});
 </script>
 </body>
 </html>
