@@ -1894,17 +1894,18 @@ function getClusterFn(gsp) {
 
 function normTechFn(raw) {
   const t = (raw||'').toLowerCase();
-  if (t.includes('offshore')) return 'Offshore Wind';
-  if (t.includes('wind'))     return 'Onshore Wind';
-  if (t.includes('solar'))    return 'Solar';
-  if (t.includes('battery')||t.includes('storage')) return 'Battery Storage';
+  if (t.includes('wind offshore')||t.includes('offshore wind')) return 'Offshore Wind';
+  if (t.includes('wind onshore')||t.includes('onshore wind')||t.includes('wind')) return 'Onshore Wind';
+  if (t.includes('pv array')||t.includes('photo voltaic')||t.includes('solar')) return 'Solar';
+  if (t.includes('energy storage')||t.includes('battery')||t.includes('laes')) return 'Battery Storage';
   if (t.includes('hydrogen')) return 'Hydrogen';
-  if (t.includes('nuclear'))  return 'Nuclear';
-  if (t.includes('gas')||t.includes('ccgt')||t.includes('ocgt')) return 'Gas';
-  if (t.includes('biomass'))  return 'Biomass';
-  if (t.includes('interconnect')) return 'Interconnector';
-  if (t.includes('hydro'))    return 'Hydro';
-  if (t.includes('ccs')||t.includes('ccus')||t.includes('carbon capture')) return 'CCS/CCUS';
+  if (t.includes('nuclear')) return 'Nuclear';
+  if (t.includes('ccgt')||t.includes('ocgt')||t.includes('gas reciprocating')||t.includes('chp')) return 'Gas';
+  if (t.includes('biomass')) return 'Biomass';
+  if (t.includes('interconnector')) return 'Interconnector';
+  if (t.includes('hydro')||t.includes('pump storage')) return 'Hydro';
+  if (t.includes('tidal')||t.includes('wave')||t.includes('marine')) return 'Marine';
+  if (t.includes('ccs')||t.includes('ccus')) return 'CCS/CCUS';
   return raw || 'Other';
 }
 
@@ -1984,18 +1985,31 @@ async function loadTEC() {
     const rows = parseCSV(text);
     if (rows.length < 2) throw new Error('CSV appears empty');
 
-    const headers = rows[0].map(h => h.toLowerCase().replace(/[^a-z0-9\s]/g,'').replace(/\s+/g,' ').trim());
+    // Normalise headers for matching
+    const headers = rows[0].map(h => h.toLowerCase().replace(/[^a-z0-9\s\/]/g,'').replace(/\s+/g,' ').trim());
     const fi = (...c) => { for(const s of c){ const i=headers.findIndex(h=>h.includes(s)); if(i>=0)return i; } return -1; };
+
+    // Supports both old-style (company/gsp/tec columns) and new-style (customer name/connection site/capacity)
     const col = {
-      id:      fi('project no','project id','ref'),
-      company: fi('company name','company'),
-      tech:    fi('technology'),
-      tec:     headers.findIndex(h=>h==='tec'||(h.startsWith('tec')&&!h.includes('stec')&&!h.includes('ldtec')&&!h.includes('temp'))),
-      gsp:     headers.findIndex(h=>(h.includes('gsp')||h.includes('grid supply'))&&!h.includes('group')&&!h.includes('grp')),
+      id:      fi('project number','project no','project id'),
+      company: fi('customer name','company name','company'),
+      tech:    fi('plant type','technology type','technology'),
+      tec:     fi('cumulative total capacity','mw increase','mw connected','installed capacity'),
+      gsp:     fi('connection site','grid supply','gsp name','gsp'),
       gspGrp:  fi('gsp group','gsp grp'),
-      stage:   fi('stage'), gate: fi('gate'), energ: fi('energisation'), status: fi('status'),
+      stage:   fi('stage'),
+      gate:    fi('gate'),
+      energ:   fi('mw effective from','energisation date','energisation'),
+      status:  fi('project status','connection status','status'),
     };
+    // For MW, prefer 'cumulative total capacity' > 'mw increase' > 'mw connected'
+    const mwCol = fi('cumulative total capacity','mw increase / decrease','mw connected','installed capacity');
     const get = (row,k) => col[k]>=0 ? (row[col[k]]||'').trim() : '';
+    const getMW = (row) => {
+      // Try cumulative first, fall back to increase, then connected
+      const cum  = col.tec >= 0 ? parseFloat(row[col.tec]) : NaN;
+      return isNaN(cum) ? 0 : Math.abs(cum); // abs because some rows have negative deltas
+    };
 
     const records=[], clusterTot={}, techCnt={};
     let totalMW=0;
@@ -2004,7 +2018,7 @@ async function loadTEC() {
       const company=get(row,'company'), gsp=get(row,'gsp')||get(row,'gspGrp');
       if(!company&&!gsp)continue;
       const cluster=getClusterFn(gsp), tech=normTechFn(get(row,'tech'));
-      const mw=parseFloat(get(row,'tec'))||0, gate=get(row,'gate');
+      const mw=getMW(row), gate=get(row,'gate');
       totalMW+=mw;
       clusterTot[cluster]=(clusterTot[cluster]||0)+mw;
       techCnt[tech]=(techCnt[tech]||0)+1;
@@ -2014,7 +2028,7 @@ async function loadTEC() {
         energisation:get(row,'energ'), status:get(row,'status') });
     }
 
-    if(!records.length) throw new Error('0 records parsed — check CSV format');
+    if(!records.length) throw new Error('0 records parsed — unexpected CSV format');
 
     records.sort((a,b)=>a.cluster.localeCompare(b.cluster)||b.tec_mw-a.tec_mw);
     const clusters=Object.entries(clusterTot).sort((a,b)=>b[1]-a[1]).map(([cluster,mw])=>({cluster,mw:Math.round(mw)}));
