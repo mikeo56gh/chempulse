@@ -350,52 +350,42 @@ nav::-webkit-scrollbar{display:none}
   <!-- ═══ PLANNING ═══ -->
   <div class="page" id="pg-planning" style="flex-direction:row">
     <div class="sb">
-      <div class="sb-hd"><span class="sb-ti">Planning Watch</span></div>
+      <div class="sb-hd"><span class="sb-ti">NSIP Watch</span></div>
       <div class="sb-bod">
         <div style="padding:.65rem .9rem;border-bottom:1px solid var(--b1)">
-          <div style="font-size:.6rem;color:var(--mid);font-weight:700;margin-bottom:.4rem;text-transform:uppercase;letter-spacing:.08em">Keywords</div>
-          <div style="font-size:.68rem;line-height:2.1;color:var(--text)">
-            <span style="color:var(--teal);font-weight:700">●</span> Solar / PV<br>
-            <span style="color:var(--teal);font-weight:700">●</span> Battery / BESS<br>
-            <span style="color:var(--teal);font-weight:700">●</span> Wind / Turbine<br>
-            <span style="color:var(--amber);font-weight:700">●</span> Hydrogen / H2<br>
-            <span style="color:var(--blue);font-weight:700">●</span> Chemical / Industrial<br>
-            <span style="color:var(--violet);font-weight:700">●</span> Carbon Capture / CCS<br>
-            <span style="color:var(--green);font-weight:700">●</span> Biomass / Biogas
-          </div>
+          <div style="font-size:.6rem;color:var(--mid);font-weight:700;margin-bottom:.5rem;text-transform:uppercase;letter-spacing:.08em">By Stage</div>
+          <div id="nsip-stage-counts" style="font-size:.68rem;color:var(--mid)"><span class="sp"></span></div>
         </div>
         <div style="padding:.65rem .9rem;border-bottom:1px solid var(--b1)">
-          <div style="font-size:.6rem;color:var(--mid);font-weight:700;margin-bottom:.4rem;text-transform:uppercase;letter-spacing:.08em">Councils</div>
-          <div style="font-size:.68rem;line-height:2.1;color:var(--text)">
-            <span style="color:var(--green)">✓</span> Hull City Council<br>
-            <span style="color:var(--green)">✓</span> East Riding of Yorkshire<br>
-            <span style="color:var(--dim)">○</span> North Yorkshire (planned)<br>
-            <span style="color:var(--dim)">○</span> Lincolnshire (planned)
-          </div>
+          <div style="font-size:.6rem;color:var(--mid);font-weight:700;margin-bottom:.5rem;text-transform:uppercase;letter-spacing:.08em">By Cluster</div>
+          <div id="nsip-cluster-counts" style="font-size:.68rem;color:var(--mid)"><span class="sp"></span></div>
         </div>
         <div style="padding:.65rem .9rem">
           <div class="ai-lbl"><div class="ai-dot"></div>AI Planning Analysis</div>
-          <textarea class="ai-inp" id="pq" rows="3" placeholder="e.g. What BESS projects are pending in East Yorkshire? What's the planning status for Hornsea 3?"></textarea>
-          <button class="ai-btn" onclick="ask('pq','pr')">Analyse →</button>
+          <textarea class="ai-inp" id="pq" rows="3" placeholder="e.g. Keadby Next Generation status? Summarise Humber energy projects in planning."></textarea>
+          <button class="ai-btn" onclick="ask('pq','pr')">Analyse &#8594;</button>
           <div class="ai-resp" id="pr"></div>
         </div>
       </div>
     </div>
     <div class="fp">
-      <div class="page-ti">Planning Applications — Hull &amp; East Yorkshire</div>
-      <div class="page-sub">Energy transition &amp; industrial keywords — sourced from Hull City Council and East Riding of Yorkshire public access portals</div>
+      <div class="page-ti">National Infrastructure Projects (NSIP)</div>
+      <div class="page-sub">Planning Inspectorate &#183; Nationally Significant Infrastructure &#183; Energy &amp; industrial &#183; Live data</div>
       <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:.75rem">
-        <button class="ai-btn" style="width:auto;padding:.35rem .9rem" onclick="loadPlanning()">↻ Refresh</button>
+        <button class="ai-btn" style="width:auto;padding:.35rem .9rem" onclick="loadPlanning()">&#8635; Refresh</button>
         <div class="filter-row" style="margin:0">
-          <span class="fchip act" onclick="togPlanF('',this)">All</span>
-          <span class="fchip" onclick="togPlanF('solar',this)">Solar</span>
-          <span class="fchip" onclick="togPlanF('bess',this)">BESS/Battery</span>
-          <span class="fchip" onclick="togPlanF('wind',this)">Wind</span>
-          <span class="fchip" onclick="togPlanF('hydrogen',this)">Hydrogen</span>
-          <span class="fchip" onclick="togPlanF('chemical',this)">Chemical</span>
+          <span class="fchip act" onclick="togPlanF('all',this)">All</span>
+          <span class="fchip"     onclick="togPlanF('active',this)">Active</span>
+          <span class="fchip"     onclick="togPlanF('Humber',this)">Humber</span>
+          <span class="fchip"     onclick="togPlanF('Teesside',this)">Teesside</span>
+          <span class="fchip"     onclick="togPlanF('wind',this)">Wind</span>
+          <span class="fchip"     onclick="togPlanF('solar',this)">Solar</span>
+          <span class="fchip"     onclick="togPlanF('hydrogen',this)">Hydrogen/CCS</span>
+          <span class="fchip"     onclick="togPlanF('gas',this)">Gas/Power</span>
         </div>
+        <span id="nsip-count" style="margin-left:auto;font-size:.65rem;color:var(--mid)"></span>
       </div>
-      <div id="planning-list"><div class="loading-ph">Click Refresh to load from Hull &amp; East Riding council portals</div></div>
+      <div id="planning-list"><div class="loading-ph"><span class="sp"></span> Loading from Planning Inspectorate...</div></div>
     </div>
   </div>
 
@@ -907,6 +897,11 @@ document.querySelectorAll('.ntab').forEach(t=>{
     t.classList.add('act');
     document.getElementById('pg-'+t.dataset.p).classList.add('act');
     if(t.dataset.p==='map'&&!mapReady)initMap();
+    if(t.dataset.p==='planning'&&!allPlan.length)loadPlanning();
+    if(t.dataset.p==='repd'&&!repdLoaded)loadREPD();
+    if(t.dataset.p==='tec'&&!tecDataLoaded)loadTEC();
+    if(t.dataset.p==='ccgt')loadCCGT();
+    if(t.dataset.p==='grid')loadGrid();
   });
 });
 
@@ -1140,91 +1135,81 @@ function toggleNewsF(tag,el){newsF=tag;document.querySelectorAll('#pg-news .fchi
 
 // ═══════════ PLANNING ═══════════
 
-let allPlan=[],planF='';
+let allPlan = [], planF = 'all';
 
-function detectKw(t){
-  t=t.toLowerCase();
-  if(/bess|battery.{0,20}storage|energy.{0,15}storage/.test(t))return'bess';
-  if(/solar|photovoltaic/.test(t))return'solar';
-  if(/wind.{0,20}(farm|turbine)|turbine/.test(t))return'wind';
-  if(/hydrogen/.test(t))return'hydrogen';
-  if(/chemical|hazardous|industrial.{0,20}(unit|facility)/.test(t))return'chemical';
-  if(/biomass|biogas|anaerobic/.test(t))return'biomass';
-  return null;
-}
-
-function parseIdox(html,council,baseUrl){
-  const items=[];
-  try{
-    const div=document.createElement('div');div.innerHTML=html;
-    div.querySelectorAll('li.searchresult,.searchResult').forEach(row=>{
-      const titleEl=row.querySelector('a');
-      const title=(titleEl?.textContent||'').trim();
-      const href=titleEl?.getAttribute('href')||'';
-      const addr=(row.querySelector('.address,.secondColumn')?.textContent||'').trim();
-      const date=(row.querySelector('.date,.validDate')?.textContent||'').replace(/Validated?:?\s*/i,'').trim();
-      const status=(row.querySelector('.status,.decision')?.textContent||'Pending').trim();
-      const desc=(row.querySelector('.description,.proposal')?.textContent||'').trim();
-      const kw=detectKw(title+' '+desc);
-      if(kw&&title.length>4)items.push({title,desc,address:addr,date,status,keyword:kw,council,link:href.startsWith('http')?href:baseUrl+href.replace(/^\//,'')});
-    });
-  }catch(e){}
-  return items;
-}
-
-async function loadPlanning(){
-  const el=document.getElementById('planning-list');
-  el.innerHTML='<div class="loading-ph"><span class="sp"></span>Checking Planning Inspectorate database…</div>';
-  allPlan=[];
-
-  // Hard 7-second timeout on the API call — if it hangs, go straight to AI
-  try{
-    const controller=new AbortController();
-    const tid=setTimeout(()=>controller.abort(),7000);
-    const r=await fetch('/api/planning',{signal:controller.signal});
-    clearTimeout(tid);
-    if(r.ok){
-      const d=await r.json();
-      window._planCouncilLinks=d.council_links||{};
-      if(d.items&&d.items.length>0){
-        allPlan=d.items;
-        renderPlanning(allPlan);
-        return;
-      }
-    }
-  }catch(e){
-    // Timed out or network error — fall through immediately
-  }
-
-  // Straight to AI fallback
-  await loadPlanFallback();
-}
-
-async function loadPlanFallback(){
-  const el=document.getElementById('planning-list');
-  el.innerHTML='<div class="loading-ph"><span class="sp"></span>Generating Hull &amp; East Yorkshire planning intelligence (5–10 secs)…</div>';
-  try{
-    const r=await fetch('/api/query',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1500,system:'Return ONLY valid JSON array.',messages:[{role:'user',content:'Generate 12 realistic 2024-2025 planning applications for Hull City Council and East Riding of Yorkshire on energy/industrial keywords: solar, BESS, wind, hydrogen, chemical. Base around Humber Estuary, Saltend, South Humber Bank. Reference real projects: H2H Saltend, Humber Zero, Viking CCS, Orsted. JSON: [{title,desc,address,date,status,keyword,council,link}] status=Pending|Approved|Refused. Also include 3 nationally significant infrastructure projects from the Planning Inspectorate.'}]})});
-    const d=await r.json();
-    if(d.error){el.innerHTML='<div class="loading-ph" style="color:var(--red)">API error: '+JSON.stringify(d.error).slice(0,200)+'</div>';return;}
-    let t=d.content?.map(c=>c.text||'').join('')||'[]';
-    allPlan=JSON.parse(t.replace(/```json|```/g,'').trim());
+async function loadPlanning() {
+  const el = document.getElementById('planning-list');
+  el.innerHTML = '<div class="loading-ph"><span class="sp"></span> Loading from Planning Inspectorate…</div>';
+  allPlan = [];
+  try {
+    const r = await fetch('/api/nsip', { signal: AbortSignal.timeout(18000) });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    allPlan = d.projects || [];
+    const sc = d.meta?.stage_counts   || {};
+    const cc = d.meta?.cluster_counts || {};
+    const SO = ['Pre-Application','Pre-Examination','Examination','Recommendation','Decision','Decided','Withdrawn'];
+    document.getElementById('nsip-stage-counts').innerHTML = SO.filter(s => sc[s])
+      .map(s => `<div style="display:flex;justify-content:space-between;padding:.15rem 0;border-bottom:.5px solid var(--b1)">
+        <span style="color:var(--text)">${s}</span>
+        <span style="font-family:var(--mono);color:${s==='Examination'?'var(--amber)':s==='Decided'?'var(--dim)':'var(--teal)'}">${sc[s]}</span>
+      </div>`).join('');
+    document.getElementById('nsip-cluster-counts').innerHTML = Object.entries(cc).sort((a,b)=>b[1]-a[1])
+      .map(([cl,n]) => `<div style="display:flex;justify-content:space-between;padding:.15rem 0;border-bottom:.5px solid var(--b1)">
+        <span style="color:var(--text)">${cl}</span>
+        <span style="font-family:var(--mono);color:var(--teal)">${n}</span>
+      </div>`).join('');
     renderPlanning(allPlan);
-  }catch(e){
-    el.innerHTML='<div class="loading-ph" style="color:var(--red)">Error: '+e.message+'</div>';
+  } catch(e) {
+    el.innerHTML = `<div class="loading-ph" style="color:var(--red)">Error: ${e.message}</div>`;
   }
 }
-const PSC={Pending:'ps-pen',Approved:'ps-app',Refused:'ps-ref'};
-function renderPlanning(items){
-  const el=document.getElementById('planning-list');
-  const f=planF?items.filter(p=>p.keyword===planF||p.title?.toLowerCase().includes(planF)):items;
-  if(!f.length){el.innerHTML='<div class="loading-ph">No items — try Refresh or change filter.</div>';return;}
-  el.innerHTML=f.map(p=>`<div class="plan-item" onclick="window.open('${p.link||'#'}','_blank')"><div class="plan-meta"><span class="plan-kw">${(p.keyword||'energy').toUpperCase()}</span><span class="plan-council">${p.council}</span><span class="${PSC[p.status]||'ps-pen'}" style="margin-left:auto">${p.status||'Pending'}</span></div><div class="plan-ti">${p.title}</div>${p.address?`<div class="plan-addr">📍 ${p.address}</div>`:''} ${p.desc&&p.desc!==p.title?`<div style="font-size:.68rem;color:var(--mid);margin-top:.2rem">${p.desc.slice(0,180)}</div>`:''} ${p.date?`<div class="plan-date" style="margin-top:.3rem">Validated: ${p.date}</div>`:''}</div>`).join('');
-  const hullLink=(window._planCouncilLinks?.hull)||'https://www.hullcc.gov.uk/padcbc/publicaccess-live/search.do?action=weeklyList';
-  const erLink=(window._planCouncilLinks?.east_riding)||'https://newplanningaccess.eastriding.gov.uk/online-applications/search.do?action=weeklyList';
-  el.innerHTML+=`<div style="font-size:.62rem;color:var(--mid);padding:.6rem .2rem;border-top:1px solid var(--b1);margin-top:.25rem;line-height:1.8">${f.length} applications shown · <a href="${hullLink}" target="_blank" style="color:var(--teal)">Hull weekly list →</a> · <a href="${erLink}" target="_blank" style="color:var(--teal)">East Riding weekly list →</a><br>Hull and East Riding portals block automated scraping — use the links above to search directly by keyword.</div>`;
+
+const STAGE_COL = {
+  'Pre-Application':'#94a3b8','Pre-Examination':'#60a5fa','Examination':'#f59e0b',
+  'Recommendation':'#a78bfa','Decision':'#fb923c','Decided':'#22c55e','Withdrawn':'#ef4444',
+};
+
+function renderPlanning(items) {
+  const el = document.getElementById('planning-list');
+  let f = [...items];
+  if      (planF==='active')   f=f.filter(p=>p.active);
+  else if (planF==='Humber')   f=f.filter(p=>p.cluster==='Humber');
+  else if (planF==='Teesside') f=f.filter(p=>p.cluster==='Teesside');
+  else if (planF==='wind')     f=f.filter(p=>/wind|offshore/i.test(p.name+p.sector));
+  else if (planF==='solar')    f=f.filter(p=>/solar|pv/i.test(p.name+p.sector));
+  else if (planF==='hydrogen') f=f.filter(p=>/hydrogen|ccs|carbon capture/i.test(p.name+p.sector+p.location));
+  else if (planF==='gas')      f=f.filter(p=>/gas|ccgt|power station|nuclear/i.test(p.name+p.sector));
+  document.getElementById('nsip-count').textContent = f.length+' of '+items.length+' projects';
+  if (!f.length) { el.innerHTML='<div class="loading-ph">No projects match this filter.</div>'; return; }
+  el.innerHTML = f.map(p => {
+    const sc2 = STAGE_COL[p.stage]||'#94a3b8';
+    const cb  = p.cluster!=='National'
+      ? `<span style="font-size:.58rem;font-weight:700;padding:1px 6px;border-radius:3px;background:rgba(6,182,212,.12);color:var(--teal)">${p.cluster}</span>` : '';
+    return `<div class="plan-item" onclick="window.open('${p.url||'#'}','_blank')" style="cursor:pointer">
+      <div class="plan-meta">
+        <span style="font-size:.6rem;font-weight:700;padding:1px 6px;border-radius:3px;background:${sc2}22;color:${sc2};border:.5px solid ${sc2}44">${p.stage}</span>
+        ${cb}${p.ref?`<span style="font-family:var(--mono);font-size:.6rem;color:var(--dim)">${p.ref}</span>`:''}
+        <span style="margin-left:auto;font-size:.6rem;color:var(--mid)">${p.submitted||''}</span>
+      </div>
+      <div class="plan-ti">${p.name}</div>
+      ${p.promoter?`<div style="font-size:.68rem;color:var(--mid);margin-top:.1rem">${p.promoter}</div>`:''}
+      ${p.location?`<div class="plan-addr">&#128205; ${p.location}</div>`:''}
+      ${p.decided?`<div style="font-size:.65rem;color:var(--green);margin-top:.2rem">&#10003; Decided: ${p.decided}</div>`:''}
+    </div>`;
+  }).join('') + `<div style="font-size:.62rem;color:var(--mid);padding:.6rem .2rem;border-top:1px solid var(--b1);margin-top:.25rem">
+    Source: <a href="https://national-infrastructure-consenting.planninginspectorate.gov.uk" target="_blank" style="color:var(--teal)">Planning Inspectorate &#8594;</a>
+    &#183; Energy &amp; industrial only &#183; Cached 12h
+  </div>`;
 }
-function togPlanF(kw,el){planF=kw;document.querySelectorAll('#pg-planning .fchip').forEach(c=>c.classList.remove('act'));el.classList.add('act');renderPlanning(allPlan)}
+
+function togPlanF(kw, el) {
+  planF = kw;
+  document.querySelectorAll('#pg-planning .fchip').forEach(c => c.classList.remove('act'));
+  el.classList.add('act');
+  renderPlanning(allPlan);
+}
 
 // ═══════════ REGULATORY ═══════════
 
