@@ -1958,95 +1958,128 @@ async function loadTEC() {
   document.getElementById('tec-table').style.display = 'none';
   document.getElementById('tec-stats').style.display = 'none';
 
-  const RESOURCE = '17becbab-e3e8-473f-b303-3806f43a6a10';
-  const SQL_BASE = 'https://api.neso.energy/api/3/action/datastore_search_sql?sql=';
+  // CSV served from same origin — no CORS, no guessing, always works
+  // Download latest from neso.energy and commit to /public/tec-register.csv
+  const LOCAL_CSV = '/tec-register.csv';
 
-  async function sqlFetch(sql) {
-    const r = await fetch(SQL_BASE + encodeURIComponent(sql), {
-      signal: AbortSignal.timeout(30000)
-    });
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    const d = await r.json();
-    if (!d.success) throw new Error(d.error?.message || 'API returned success:false');
-    return d.result.records;
+  // Fallback: try known NESO CDN URLs (Tue/Fri releases, most recent first)
+  const NESO_BASE = 'https://api.neso.energy/dataset/cbd45e54-e6e2-4a38-99f1-8de6fd96d7c1/resource/17becbab-e3e8-473f-b303-3806f43a6a10/download';
+  const MONTHS = ['january','february','march','april','may','june','july','august','september','october','november','december'];
+  function nesoUrls() {
+    const urls = [], now = new Date();
+    for (let d = 0; d < 90; d++) {
+      const dt = new Date(now); dt.setDate(dt.getDate() - d);
+      if (dt.getDay() !== 2 && dt.getDay() !== 5) continue;
+      const day = dt.getDate(), mon = MONTHS[dt.getMonth()], yr = dt.getFullYear();
+      urls.push(`${NESO_BASE}/tec-register-${String(day).padStart(2,'0')}-${mon}-${yr}.csv`);
+    }
+    return urls;
+  }
+
+  function parseCSV(text) {
+    const rows = [], CR = 13, LF = 10, COMMA = 44, QUOTE = 34;
+    let field = '', row = [], inQ = false;
+    for (let i = 0; i < text.length; i++) {
+      const c = text.charCodeAt(i);
+      if (c === QUOTE) {
+        if (inQ && text.charCodeAt(i+1) === QUOTE) { field += '"'; i++; }
+        else inQ = !inQ;
+      } else if (c === COMMA && !inQ) {
+        row.push(field.trim()); field = '';
+      } else if ((c === LF || c === CR) && !inQ) {
+        if (c === CR && text.charCodeAt(i+1) === LF) i++;
+        row.push(field.trim()); field = '';
+        if (row.some(f => f)) rows.push(row);
+        row = [];
+      } else field += text[i];
+    }
+    if (field || row.length) { row.push(field.trim()); rows.push(row); }
+    return rows;
+  }
+
+  function isValidCSV(text) {
+    const first = text.split('\n')[0].toLowerCase();
+    return first.includes('company') || first.includes('gsp') || first.includes('tec');
   }
 
   try {
-    // Step 1: get total count
-    loading.innerHTML = '<span class="sp"></span> Counting records…';
-    const countRecs = await sqlFetch(`SELECT COUNT(*) FROM "${RESOURCE}"`);
-    const total = parseInt(countRecs[0]?.count || countRecs[0]?.COUNT || 0);
-    if (!total) throw new Error('COUNT returned 0');
+    let csvText = null, csvSource = null;
 
-    // Step 2: fetch all records in pages of 5000
-    const PAGE = 5000;
-    const pages = Math.ceil(total / PAGE);
-    let allRecords = [];
+    // Try 1: local file (committed to repo — fastest, most reliable)
+    try {
+      const r = await fetch(LOCAL_CSV, { signal: AbortSignal.timeout(5000) });
+      if (r.ok) {
+        const t = await r.text();
+        if (isValidCSV(t)) { csvText = t; csvSource = 'local'; }
+      }
+    } catch(e) { /* not found locally, try NESO */ }
 
-    for (let p = 0; p < pages; p++) {
-      const offset = p * PAGE;
-      loading.innerHTML = `<span class="sp"></span> Loading… ${Math.min(offset + PAGE, total).toLocaleString()} / ${total.toLocaleString()}`;
-      const recs = await sqlFetch(
-        `SELECT * FROM "${RESOURCE}" ORDER BY "_id" ASC LIMIT ${PAGE} OFFSET ${offset}`
-      );
-      allRecords = allRecords.concat(recs);
-      if (recs.length < PAGE) break; // last page
+    // Try 2: NESO CDN with date-based filenames
+    if (!csvText) {
+      loading.innerHTML = '<span class="sp"></span> Fetching from NESO…';
+      for (const url of nesoUrls()) {
+        try {
+          const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
+          if (!r.ok) continue;
+          const t = await r.text();
+          if (isValidCSV(t)) { csvText = t; csvSource = url.split('/').pop(); break; }
+        } catch(e) { continue; }
+      }
     }
 
-    if (!allRecords.length) throw new Error('No records returned');
+    if (!csvText) throw new Error(
+      'Could not load TEC CSV. Fix: download the latest CSV from neso.energy and add it to your repo as <code>public/tec-register.csv</code>'
+    );
 
-    // Step 3: detect field names from first record
-    const sample = allRecords[0];
-    const keys = Object.keys(sample);
-    const fk = (...needles) => keys.find(k =>
-      needles.some(n => k.toLowerCase().replace(/[^a-z0-9]/g,'').includes(n.toLowerCase().replace(/[^a-z0-9]/g,'')))
-    ) || null;
-    const F = {
-      id:      fk('projectno','projectid','refno'),
-      company: fk('companyname','company','applicant'),
-      tech:    fk('technology','techtype','type'),
-      tec:     keys.find(k => { const l = k.toLowerCase().replace(/[^a-z0-9]/g,'');
-                 return l === 'tec' || (l.startsWith('tec') && !l.includes('stec') && !l.includes('ldtec')); }),
-      gsp:     keys.find(k => (k.toLowerCase().includes('gsp') || k.toLowerCase().includes('gridsupply')) && !k.toLowerCase().includes('group') && !k.toLowerCase().includes('grp')),
-      gspgrp:  fk('gspgroup','gspgrp','gridgroup'),
-      stage:   fk('stage'),
-      gate:    fk('gate'),
-      energ:   fk('energisation','energ'),
-      status:  fk('status','connectionstatus'),
+    loading.innerHTML = '<span class="sp"></span> Parsing…';
+    const rows = parseCSV(csvText);
+    if (rows.length < 2) throw new Error('CSV too short');
+
+    const headers = rows[0].map(h => h.toLowerCase().replace(/[^a-z0-9\s]/g,'').replace(/\s+/g,' ').trim());
+    const fi = (...c) => { for (const s of c) { const i = headers.findIndex(h => h.includes(s)); if (i>=0) return i; } return -1; };
+    const col = {
+      id:      fi('project no','project id','ref'),
+      company: fi('company name','company'),
+      tech:    fi('technology'),
+      tec:     headers.findIndex(h => h==='tec'||(h.startsWith('tec')&&!h.includes('stec')&&!h.includes('ldtec')&&!h.includes('temp'))),
+      gsp:     headers.findIndex(h => (h.includes('gsp')||h.includes('grid supply'))&&!h.includes('group')&&!h.includes('grp')),
+      gspGrp:  fi('gsp group','gsp grp'),
+      stage:   fi('stage'), gate: fi('gate'), energ: fi('energisation'), status: fi('status'),
     };
-    const g = (rec, k) => F[k] ? String(rec[F[k]] ?? '').trim() : '';
+    const get = (row, k) => col[k] >= 0 ? (row[col[k]] || '').trim() : '';
 
-    // Step 4: process records
     const records = [], clusterTot = {}, techCnt = {};
     let totalMW = 0;
-    for (const rec of allRecords) {
-      const company = g(rec,'company'), gsp = g(rec,'gsp') || g(rec,'gspgrp');
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i]; if (!row || row.length < 3) continue;
+      const company = get(row,'company'), gsp = get(row,'gsp') || get(row,'gspGrp');
       if (!company && !gsp) continue;
-      const cluster = getClusterFn(gsp), tech = normTechFn(g(rec,'tech'));
-      const mw = parseFloat(g(rec,'tec')) || 0, gate = g(rec,'gate');
+      const cluster = getClusterFn(gsp), tech = normTechFn(get(row,'tech'));
+      const mw = parseFloat(get(row,'tec')) || 0, gate = get(row,'gate');
       totalMW += mw;
       clusterTot[cluster] = (clusterTot[cluster]||0) + mw;
       techCnt[tech]       = (techCnt[tech]||0) + 1;
       records.push({
-        project_no: g(rec,'id'), company, technology: tech, technology_raw: g(rec,'tech'),
-        tec_mw: mw, gsp, cluster, stage: g(rec,'stage'), gate,
+        project_no: get(row,'id'), company, technology: tech, technology_raw: get(row,'tech'),
+        tec_mw: mw, gsp, cluster, stage: get(row,'stage'), gate,
         gate_label: gate==='1'?'Gate 1 — firm': gate==='2'?'Gate 2 — queue': gate||'',
-        energisation: g(rec,'energ'), status: g(rec,'status'),
+        energisation: get(row,'energ'), status: get(row,'status'),
       });
     }
 
-    if (!records.length) throw new Error(`API returned ${allRecords.length} rows but 0 parsed. Keys: ${keys.slice(0,6).join(', ')}`);
+    if (!records.length) throw new Error(`0 records parsed. Column indices: ${JSON.stringify(col)}`);
 
     records.sort((a,b) => a.cluster.localeCompare(b.cluster) || b.tec_mw - a.tec_mw);
     const clusters = Object.entries(clusterTot).sort((a,b)=>b[1]-a[1]).map(([cluster,mw])=>({cluster,mw:Math.round(mw)}));
-    finaliseTEC(records, clusters, Math.round(totalMW), `NESO SQL API · ${total.toLocaleString()} records`);
+    finaliseTEC(records, clusters, Math.round(totalMW), csvSource === 'local' ? 'local CSV' : csvSource);
 
   } catch(e) {
     loading.style.display = 'none';
     errorEl.style.display = 'block';
-    errorEl.innerHTML = `<strong>Error loading TEC Register:</strong> ${e.message}<br>
-      <a href="https://www.neso.energy/data-portal/transmission-entry-capacity-tec-register"
-         target="_blank" style="color:var(--teal)">View on NESO data portal →</a>`;
+    errorEl.innerHTML = `<strong>Error loading TEC Register:</strong> ${e.message}<br><br>
+      <strong>Fix:</strong> Download the latest CSV from
+      <a href="https://www.neso.energy/data-portal/transmission-entry-capacity-tec-register" target="_blank" style="color:var(--teal)">NESO data portal</a>
+      and add it to your GitHub repo as <code style="font-size:.75rem;background:var(--bg2);padding:1px 4px;border-radius:3px">public/tec-register.csv</code>`;
   }
 }
 
