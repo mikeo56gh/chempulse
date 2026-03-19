@@ -29,6 +29,9 @@
     },
     "api/tec.js": {
       "maxDuration": 30
+    },
+    "api/nsip.js": {
+      "maxDuration": 20
     }
   }
 }
