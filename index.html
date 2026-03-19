@@ -1958,23 +1958,72 @@ async function loadTEC() {
   document.getElementById('tec-table').style.display = 'none';
   document.getElementById('tec-stats').style.display = 'none';
 
-  try {
-    loading.innerHTML = '<span class="sp"></span> Loading TEC Register from NESO…';
-    const r = await fetch('/api/tec', { signal: AbortSignal.timeout(29000) });
-    const d = await r.json();
-    if (!r.ok || d.error) throw new Error(d.error || `HTTP ${r.status}`);
-    if (!d.records?.length) throw new Error('API returned 0 records');
+  function parseCSV(text) {
+    const rows=[]; let field='',row=[],inQ=false;
+    for(let i=0;i<text.length;i++){
+      const c=text.charCodeAt(i);
+      if(c===34){if(inQ&&text.charCodeAt(i+1)===34){field+='"';i++;}else inQ=!inQ;}
+      else if(c===44&&!inQ){row.push(field.trim());field='';}
+      else if((c===10||c===13)&&!inQ){
+        if(c===13&&text.charCodeAt(i+1)===10)i++;
+        row.push(field.trim());field='';
+        if(row.some(f=>f))rows.push(row);row=[];
+      } else field+=text[i];
+    }
+    if(field||row.length){row.push(field.trim());rows.push(row);}
+    return rows;
+  }
 
-    const { records, meta } = d;
-    const clusters = meta.clusters || [];
-    finaliseTEC(records, clusters, meta.total_mw, `${meta.total_records.toLocaleString()} records · ${meta.strategy || 'NESO'}`);
+  try {
+    // Fetch the CSV committed to /public/tec-register.csv in the repo
+    const r = await fetch('/tec-register.csv', { signal: AbortSignal.timeout(15000) });
+    if (!r.ok) throw new Error(`Could not load /tec-register.csv (${r.status}) — make sure it is committed to the public/ folder in your repo`);
+    const text = await r.text();
+
+    loading.innerHTML = '<span class="sp"></span> Parsing…';
+    const rows = parseCSV(text);
+    if (rows.length < 2) throw new Error('CSV appears empty');
+
+    const headers = rows[0].map(h => h.toLowerCase().replace(/[^a-z0-9\s]/g,'').replace(/\s+/g,' ').trim());
+    const fi = (...c) => { for(const s of c){ const i=headers.findIndex(h=>h.includes(s)); if(i>=0)return i; } return -1; };
+    const col = {
+      id:      fi('project no','project id','ref'),
+      company: fi('company name','company'),
+      tech:    fi('technology'),
+      tec:     headers.findIndex(h=>h==='tec'||(h.startsWith('tec')&&!h.includes('stec')&&!h.includes('ldtec')&&!h.includes('temp'))),
+      gsp:     headers.findIndex(h=>(h.includes('gsp')||h.includes('grid supply'))&&!h.includes('group')&&!h.includes('grp')),
+      gspGrp:  fi('gsp group','gsp grp'),
+      stage:   fi('stage'), gate: fi('gate'), energ: fi('energisation'), status: fi('status'),
+    };
+    const get = (row,k) => col[k]>=0 ? (row[col[k]]||'').trim() : '';
+
+    const records=[], clusterTot={}, techCnt={};
+    let totalMW=0;
+    for(let i=1;i<rows.length;i++){
+      const row=rows[i]; if(!row||row.length<3)continue;
+      const company=get(row,'company'), gsp=get(row,'gsp')||get(row,'gspGrp');
+      if(!company&&!gsp)continue;
+      const cluster=getClusterFn(gsp), tech=normTechFn(get(row,'tech'));
+      const mw=parseFloat(get(row,'tec'))||0, gate=get(row,'gate');
+      totalMW+=mw;
+      clusterTot[cluster]=(clusterTot[cluster]||0)+mw;
+      techCnt[tech]=(techCnt[tech]||0)+1;
+      records.push({ project_no:get(row,'id'), company, technology:tech, technology_raw:get(row,'tech'),
+        tec_mw:mw, gsp, cluster, stage:get(row,'stage'), gate,
+        gate_label:gate==='1'?'Gate 1 — firm':gate==='2'?'Gate 2 — queue':gate||'',
+        energisation:get(row,'energ'), status:get(row,'status') });
+    }
+
+    if(!records.length) throw new Error('0 records parsed — check CSV format');
+
+    records.sort((a,b)=>a.cluster.localeCompare(b.cluster)||b.tec_mw-a.tec_mw);
+    const clusters=Object.entries(clusterTot).sort((a,b)=>b[1]-a[1]).map(([cluster,mw])=>({cluster,mw:Math.round(mw)}));
+    finaliseTEC(records, clusters, Math.round(totalMW), `${records.length.toLocaleString()} records`);
 
   } catch(e) {
     loading.style.display = 'none';
     errorEl.style.display = 'block';
-    errorEl.innerHTML = `<strong>Error loading TEC Register:</strong> ${e.message}<br>
-      <a href="https://www.neso.energy/data-portal/transmission-entry-capacity-tec-register"
-         target="_blank" style="color:var(--teal)">View on NESO data portal →</a>`;
+    errorEl.innerHTML = `<strong>Error:</strong> ${e.message}`;
   }
 }
 
