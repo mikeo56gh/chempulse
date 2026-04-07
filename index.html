@@ -1081,7 +1081,7 @@ function buildSiteList(sites){
     </div>`).join('');
 }
 function flyTo(lat,lng){map?.flyTo([lat,lng],11,{duration:1.2})}
-window.addEventListener('load',()=>initMap());
+// initMap called from tab handler and load event below
 
 // ═══════════ ENERGY DATA ═══════════
 
@@ -1535,7 +1535,7 @@ async function loadReg(){
     let t=d.content?.map(c=>c.text||'').join('')||'[]';
     // Strip control chars and smart quotes that break JSON
 t = t.replace(/```json|```/g,'').trim()
-     .replace(/[ -]/g,' ')
+     .replace(/[-]/g,' ')
      .replace(/[\u2018\u2019]/g,"'")
      .replace(/[\u201C\u201D]/g,'"');
 try { items=JSON.parse(t); } catch(e2) {
@@ -2137,6 +2137,7 @@ function renderREMIT(d,el){
 // ═══════════ INIT ═══════════
 
 window.addEventListener('load',()=>{
+  initMap();
   loadSites();
   loadEnergy();
   loadRivers();
