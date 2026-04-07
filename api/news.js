@@ -1,6 +1,5 @@
 // api/news.js — Server-side RSS aggregator for ChemPulse
-// All feeds fetched server-side to bypass browser CORS restrictions
-// 17 confirmed working sources across safety, regulatory, energy, chemical industry
+// 17 sources fetched in parallel, server-side to bypass CORS
 
 export const config = { maxDuration: 25 };
 
@@ -11,27 +10,38 @@ export default async function handler(req, res) {
 
   const FEEDS = [
     // Safety & Regulatory
-    { url: 'https://www.hse.gov.uk/press/press-rss.xml',                                                           source: 'HSE',                tag: 'safety'      },
-    { url: 'https://press.hse.gov.uk/feed/',                                                                        source: 'HSE Press',          tag: 'safety'      },
-    { url: 'https://echa.europa.eu/rss/news.xml',                                                                   source: 'ECHA',               tag: 'regulatory'  },
-    { url: 'https://www.chemicalwatch.com/news/rss',                                                                source: 'Chemical Watch',     tag: 'regulatory'  },
-    { url: 'https://www.cefic.org/feed/',                                                                           source: 'CEFIC',              tag: 'regulatory'  },
+    { url: 'https://www.hse.gov.uk/press/press-rss.xml',                                                  source: 'HSE',                tag: 'safety',      maxItems: 5 },
+    { url: 'https://press.hse.gov.uk/feed/',                                                               source: 'HSE Press',          tag: 'safety',      maxItems: 5 },
+    { url: 'https://echa.europa.eu/rss/news.xml',                                                          source: 'ECHA',               tag: 'regulatory',  maxItems: 5 },
+    { url: 'https://www.chemicalwatch.com/news/rss',                                                       source: 'Chemical Watch',     tag: 'regulatory',  maxItems: 4 },
+    { url: 'https://www.cefic.org/feed/',                                                                   source: 'CEFIC',              tag: 'regulatory',  maxItems: 4 },
     // UK Government
-    { url: 'https://www.gov.uk/government/organisations/environment-agency.atom',                                   source: 'Environment Agency', tag: 'environment' },
-    { url: 'https://www.gov.uk/government/organisations/department-for-energy-security-and-net-zero.atom',          source: 'DESNZ',              tag: 'energy'      },
-    { url: 'https://www.gov.uk/government/organisations/oil-and-gas-authority.atom',                                source: 'NSTA',               tag: 'energy'      },
-    // GovWire (confirmed working - RSS XML)
-    { url: 'https://www.govwire.co.uk/rss/department-for-energy-security-and-net-zero',                            source: 'GovWire DESNZ',      tag: 'energy'      },
-    { url: 'https://www.govwire.co.uk/rss/department-for-science-innovation-and-technology',                       source: 'GovWire DSIT',       tag: 'energy'      },
-    { url: 'https://www.govwire.co.uk/rss/environment-agency',                                                     source: 'GovWire EA',         tag: 'environment' },
-    { url: 'https://www.govwire.co.uk/rss/department-for-environment-food-rural-affairs',                          source: 'GovWire DEFRA',      tag: 'environment' },
+    { url: 'https://www.gov.uk/government/organisations/environment-agency.atom',                          source: 'Environment Agency', tag: 'environment', maxItems: 3 },
+    { url: 'https://www.gov.uk/government/organisations/department-for-energy-security-and-net-zero.atom', source: 'DESNZ',              tag: 'energy',      maxItems: 5 },
+    { url: 'https://www.gov.uk/government/organisations/oil-and-gas-authority.atom',                       source: 'NSTA',               tag: 'energy',      maxItems: 4 },
+    // GovWire (confirmed RSS XML)
+    { url: 'https://www.govwire.co.uk/rss/department-for-energy-security-and-net-zero',                   source: 'GovWire DESNZ',      tag: 'energy',      maxItems: 5 },
+    { url: 'https://www.govwire.co.uk/rss/department-for-science-innovation-and-technology',              source: 'GovWire DSIT',       tag: 'energy',      maxItems: 4 },
+    { url: 'https://www.govwire.co.uk/rss/environment-agency',                                             source: 'GovWire EA',         tag: 'environment', maxItems: 3 },
+    { url: 'https://www.govwire.co.uk/rss/department-for-environment-food-rural-affairs',                  source: 'GovWire DEFRA',      tag: 'environment', maxItems: 3 },
     // Energy & Industry News
-    { url: 'https://www.energylivenews.com/feed/',                                                                  source: 'Energy Live News',   tag: 'energy'      },
-    { url: 'https://www.energyinst.org/rss/news',                                                                   source: 'Energy Institute',   tag: 'energy'      },
-    { url: 'https://www.carbonbrief.org/feed/',                                                                     source: 'Carbon Brief',       tag: 'environment' },
+    { url: 'https://www.energylivenews.com/feed/',                                                         source: 'Energy Live News',   tag: 'energy',      maxItems: 6 },
+    { url: 'https://www.energyinst.org/rss/news',                                                          source: 'Energy Institute',   tag: 'energy',      maxItems: 5 },
+    { url: 'https://www.carbonbrief.org/feed/',                                                            source: 'Carbon Brief',       tag: 'environment', maxItems: 4 },
     // S&P Global Commodity Insights (free RSS)
-    { url: 'https://www.spglobal.com/energy/en/rss/latest-natural-gas-headlines',                                  source: 'S&P Global Gas',     tag: 'energy'      },
-    { url: 'https://www.spglobal.com/energy/en/rss/latest-chemicals-headlines',                                    source: 'S&P Global Chem',    tag: 'ops'         },
+    { url: 'https://www.spglobal.com/energy/en/rss/latest-natural-gas-headlines',                         source: 'S&P Global Gas',     tag: 'energy',      maxItems: 5 },
+    { url: 'https://www.spglobal.com/energy/en/rss/latest-chemicals-headlines',                           source: 'S&P Global Chem',    tag: 'ops',         maxItems: 5 },
+  ];
+
+  // Titles containing these strings are low-value noise — skip them
+  const NOISE_PATTERNS = [
+    /environmental permit application advertisement/i,
+    /permit application advertisement/i,
+    /^notice:/i,
+    /EPR\/[A-Z0-9]+/,
+    /planning application/i,
+    /prior approval/i,
+    /variation application/i,
   ];
 
   const allItems = [];
@@ -48,15 +58,15 @@ export default async function handler(req, res) {
       });
       if (!r.ok) throw new Error('HTTP ' + r.status);
       const xml = await r.text();
-      const items = parseRSS(xml, feed.source, feed.tag);
+      const items = parseRSS(xml, feed.source, feed.tag, feed.maxItems, NOISE_PATTERNS);
       allItems.push(...items);
-      sourceStatus[feed.source] = 'ok';
+      sourceStatus[feed.source] = 'ok:' + items.length;
     } catch(e) {
-      sourceStatus[feed.source] = e.message || 'failed';
+      sourceStatus[feed.source] = 'fail:' + (e.message || 'unknown');
     }
   }));
 
-  // Sort by date, deduplicate titles, cap at 40
+  // Sort by date descending, deduplicate by title
   allItems.sort((a, b) => new Date(b.rawDate || 0) - new Date(a.rawDate || 0));
   const seen = new Set();
   const deduped = allItems.filter(item => {
@@ -64,7 +74,7 @@ export default async function handler(req, res) {
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
-  }).slice(0, 40);
+  }).slice(0, 50);
 
   res.status(200).json({
     items: deduped,
@@ -74,14 +84,17 @@ export default async function handler(req, res) {
   });
 }
 
-function parseRSS(xml, source, defaultTag) {
+function parseRSS(xml, source, defaultTag, maxItems, noisePatterns) {
   const items = [];
   try {
     const isAtom = xml.includes('<feed');
     const entries = extractTags(xml, isAtom ? 'entry' : 'item');
-    for (const entry of entries.slice(0, 8)) {
+    for (const entry of entries) {
+      if (items.length >= maxItems) break;
       const title = stripHTML(extractTag(entry, 'title') || '').trim();
       if (!title || title.length < 5) continue;
+      // Skip noise
+      if (noisePatterns.some(p => p.test(title))) continue;
       const rawDesc = extractTag(entry, isAtom ? 'summary' : 'description') || extractTag(entry, 'content') || '';
       const desc = stripHTML(rawDesc).trim().slice(0, 300);
       let link = '';
