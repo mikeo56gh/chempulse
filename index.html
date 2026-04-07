@@ -234,6 +234,14 @@ nav::-webkit-scrollbar{display:none}
 @media(max-width:900px){.sb,.rp{display:none}}
 ::-webkit-scrollbar{width:4px;height:4px}
 ::-webkit-scrollbar-thumb{background:var(--b2);border-radius:2px}
+
+  .wx-kpi { background:var(--bg2);border:1px solid var(--b1);border-radius:10px;padding:.75rem 1rem; }
+  .wx-kpi-l { font-size:.6rem;text-transform:uppercase;letter-spacing:.08em;color:var(--mid);margin-bottom:.3rem; }
+  .wx-kpi-v { font-family:var(--mono);font-size:1.25rem;font-weight:500;color:var(--text); }
+  .wx-kpi-s { font-size:.65rem;color:var(--mid);margin-top:.15rem; }
+  .wx-ops-card { background:var(--bg2);border:1px solid var(--b1);border-radius:10px;padding:.85rem 1rem; }
+  .wx-day { background:var(--bg2);border:1px solid var(--b1);border-radius:8px;padding:.6rem .4rem;text-align:center; }
+
 </style>
 </head>
 <body>
@@ -258,6 +266,7 @@ nav::-webkit-scrollbar{display:none}
   <div class="ntab" data-p="grid">🔌 Grid Intelligence</div>
   <div class="ntab" data-p="repd">🌱 REPD</div>
   <div class="ntab" data-p="tec">⚡ TEC Register</div>
+  <div class="ntab" data-p="weather">⛅ Weather</div>
 </nav>
 
 <div class="ws">
@@ -290,11 +299,11 @@ nav::-webkit-scrollbar{display:none}
     <div class="rp">
       <div class="rp-ti">Market Inputs</div>
       <div class="kpi" id="kpi-ttf"><div class="kpi-l">TTF Gas (indicative)</div><div class="kpi-v">€38.40 <span class="kpi-u">/MWh</span></div><div class="kpi-c up">↑ +4.2%</div></div>
-      <div class="kpi" id="kpi-nbp"><div class="kpi-l">UK NBP Gas</div><div class="kpi-v">71.2p <span class="kpi-u">/therm</span></div><div class="kpi-c up">↑ +3.8%</div></div>
-      <div class="kpi" id="kpi-pwr"><div class="kpi-l">UK Power D+1</div><div class="kpi-v">£89.50 <span class="kpi-u">/MWh</span></div><div class="kpi-c up">↑ +2.8%</div></div>
+      <div class="kpi" id="kpi-nbp"><div class="kpi-l">UK NBP Gas</div><div class="kpi-v">151.1p <span class="kpi-u">/therm</span></div><div class="kpi-c up">↑ indicative</div></div>
+      <div class="kpi" id="kpi-pwr"><div class="kpi-l">UK Power D+1</div><div class="kpi-v">£92.00 <span class="kpi-u">/MWh</span></div><div class="kpi-c" style="color:var(--mid)">indicative</div></div>
       <div class="kpi"><div class="kpi-l">EU ETS Carbon</div><div class="kpi-v">€64.80 <span class="kpi-u">/tCO₂</span></div><div class="kpi-c dn">↓ −1.1%</div></div>
       <div class="kpi" style="border-left:3px solid var(--teal)"><div class="kpi-l" style="color:var(--teal)">Ethanol (Denatured UK)</div><div class="kpi-v">£640 <span class="kpi-u">/mt</span></div><div class="kpi-c up">↑ +1.9%</div></div>
-      <div class="kpi"><div class="kpi-l">Brent Crude</div><div class="kpi-v">$82.40 <span class="kpi-u">/bbl</span></div><div class="kpi-c dn">↓ −0.6%</div></div>
+      <div class="kpi"><div class="kpi-l">Brent Crude</div><div class="kpi-v">$73.20 <span class="kpi-u">/bbl</span></div><div class="kpi-c dn">↓ indicative</div></div>
       <div class="rp-ti" style="margin-top:.25rem">Cost Pressure vs 90d avg</div>
       <div style="padding:.4rem 0">
         <div class="bar-r"><span class="bar-l">TTF Gas</span><div class="bar-t"><div class="bar-f" style="width:72%;background:linear-gradient(90deg,#fbbf24,#ef4444)"></div></div><span class="bar-v up">+72%</span></div>
@@ -390,38 +399,66 @@ nav::-webkit-scrollbar{display:none}
   </div>
 
   <!-- ═══ MARKETS ═══ -->
-  <div class="page" id="pg-markets">
-    <div class="fp">
-      <div class="page-ti">Market Inputs</div>
-      <div class="page-sub">Energy, feedstocks and environmental cost drivers for UK &amp; EU chemical production</div>
-      <div class="sec-hd">Energy &amp; Carbon</div>
-      <div class="grid-3">
-        <div class="card"><div class="card-ti">TTF Gas (EEX)</div><div class="card-v">€38.40 <span class="card-u">/MWh</span></div><div class="card-c up">↑ +4.2% · register free at eex.com</div><div class="card-spark"><svg viewBox="0 0 80 24"><polyline points="0,22 10,18 20,20 30,14 40,16 50,10 60,8 70,12 80,6" fill="none" stroke="#ef4444" stroke-width="1.5"/></svg></div></div>
-        <div class="card"><div class="card-ti">UK NBP Gas (Ofgem)</div><div class="card-v">71.2p <span class="card-u">/therm</span></div><div class="card-c up">↑ +3.8%</div><div class="card-spark"><svg viewBox="0 0 80 24"><polyline points="0,24 15,20 25,22 40,16 55,18 70,10 80,8" fill="none" stroke="#f59e0b" stroke-width="1.5"/></svg></div></div>
-        <div class="card"><div class="card-ti">UK Power D+1 (Elexon)</div><div class="card-v">£89.50 <span class="card-u">/MWh</span></div><div class="card-c up">↑ +2.8%</div><div class="card-spark"><svg viewBox="0 0 80 24"><polyline points="0,20 12,22 25,16 38,18 50,12 62,14 75,8 80,10" fill="none" stroke="#60a5fa" stroke-width="1.5"/></svg></div></div>
-        <div class="card" style="border-color:rgba(124,58,237,.2)"><div class="card-ti" style="color:var(--violet)">EU ETS Carbon (EEX)</div><div class="card-v">€64.80 <span class="card-u">/tCO₂</span></div><div class="card-c dn">↓ −1.1%</div><div class="card-spark"><svg viewBox="0 0 80 24"><polyline points="0,8 15,10 28,7 42,12 56,10 70,14 80,16" fill="none" stroke="#a78bfa" stroke-width="1.5"/></svg></div></div>
-        <div class="card"><div class="card-ti">Brent Crude (EIA)</div><div class="card-v">$82.40 <span class="card-u">/bbl</span></div><div class="card-c dn">↓ −0.6%</div></div>
-        <div class="card" style="border-color:rgba(8,145,178,.25)"><div class="card-ti" style="color:var(--teal)">Ethanol — Denatured UK</div><div class="card-v">£640 <span class="card-u">/mt</span></div><div class="card-c up">↑ +1.9% · +19% vs 90d avg</div><div class="card-spark"><svg viewBox="0 0 80 24"><polyline points="0,20 10,18 22,16 35,14 48,12 60,10 72,8 80,7" fill="none" stroke="#0891b2" stroke-width="1.5"/></svg></div></div>
+  <div class="page" id="pg-markets" style="flex-direction:column;overflow-y:auto">
+    <div class="fp" style="max-width:1200px;margin:0 auto;width:100%;padding:1.25rem">
+
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;flex-wrap:wrap;gap:.5rem">
+        <div>
+          <div class="page-ti">Market Inputs</div>
+          <div class="page-sub">Live energy &amp; metals · Indicative chemicals · ICIS headlines · Updated every 5 min</div>
+        </div>
+        <button class="ai-btn" style="width:auto;padding:.35rem .9rem" onclick="loadMarkets(true)">&#8635; Refresh</button>
       </div>
-      <div class="sec-hd">Feedstocks &amp; Derivatives</div>
-      <div class="grid-3">
-        <div class="card"><div class="card-ti">Ethylene NWE</div><div class="card-v">$780 <span class="card-u">/mt</span></div><div class="card-c up">↑ +1.4%</div></div>
-        <div class="card"><div class="card-ti">Propylene NWE</div><div class="card-v">$710 <span class="card-u">/mt</span></div><div class="card-c fl">→ Flat</div></div>
-        <div class="card"><div class="card-ti">Benzene ARA</div><div class="card-v">$820 <span class="card-u">/mt</span></div><div class="card-c dn">↓ −0.9%</div></div>
-        <div class="card"><div class="card-ti">Methanol NWE</div><div class="card-v">€280 <span class="card-u">/mt</span></div><div class="card-c up">↑ +0.7%</div></div>
-        <div class="card"><div class="card-ti">Caustic Soda NWE</div><div class="card-v">€390 <span class="card-u">/mt</span></div><div class="card-c fl">→ Flat</div></div>
-        <div class="card"><div class="card-ti">Ammonia Black Sea</div><div class="card-v">$390 <span class="card-u">/mt</span></div><div class="card-c dn">↓ −2.1%</div></div>
+
+      <!-- ── ENERGY (live via OilPriceAPI) ───────────────────────────── -->
+      <div class="sec-hd">Energy &amp; Carbon
+        <span id="mkt-energy-badge" style="font-size:.58rem;font-weight:600;padding:1px 7px;border-radius:10px;background:rgba(239,68,68,.12);color:var(--red)">Add OILPRICE_API_KEY for live</span>
       </div>
+      <div class="grid-3" id="mkt-energy-grid">
+        <div class="card mkt-loading"><div class="card-ti">TTF Gas</div><div class="card-v"><span class="sp"></span></div></div>
+        <div class="card mkt-loading"><div class="card-ti">UK NBP Gas</div><div class="card-v"><span class="sp"></span></div></div>
+        <div class="card mkt-loading"><div class="card-ti">Brent Crude</div><div class="card-v"><span class="sp"></span></div></div>
+        <div class="card mkt-loading"><div class="card-ti">EU ETS Carbon</div><div class="card-v"><span class="sp"></span></div></div>
+        <div class="card mkt-loading"><div class="card-ti">Fuel Ethanol (US)</div><div class="card-v"><span class="sp"></span></div></div>
+        <div class="card mkt-loading"><div class="card-ti">Jet Fuel</div><div class="card-v"><span class="sp"></span></div></div>
+      </div>
+
+      <!-- ── CHEMICALS (indicative + ICIS signal) ────────────────────── -->
+      <div class="sec-hd">Chemical Feedstocks
+        <span style="font-size:.58rem;font-weight:600;padding:1px 7px;border-radius:10px;background:rgba(217,119,6,.12);color:var(--amber)">Indicative · ICIS Q1 2026</span>
+      </div>
+      <div class="grid-3" id="mkt-chem-grid"><!-- filled by JS --></div>
+
+      <!-- ── METALS (live via metals.dev) ──────────────────────────────── -->
+      <div class="sec-hd">Catalyst &amp; Precious Metals
+        <span id="mkt-metals-badge" style="font-size:.58rem;font-weight:600;padding:1px 7px;border-radius:10px;background:rgba(239,68,68,.12);color:var(--red)">Add METALS_DEV_API_KEY for live</span>
+      </div>
+      <div class="grid-3" id="mkt-metals-grid">
+        <div class="card mkt-loading"><div class="card-ti">Palladium</div><div class="card-v"><span class="sp"></span></div></div>
+        <div class="card mkt-loading"><div class="card-ti">Platinum</div><div class="card-v"><span class="sp"></span></div></div>
+        <div class="card mkt-loading"><div class="card-ti">Rhodium</div><div class="card-v"><span class="sp"></span></div></div>
+      </div>
+
+      <!-- ── ICIS HEADLINES ──────────────────────────────────────────── -->
+      <div class="sec-hd">ICIS Chemical Price Intelligence
+        <span style="font-size:.58rem;color:var(--green);font-weight:600">&#9679; Live RSS</span>
+      </div>
+      <div id="mkt-icis-headlines" style="margin-bottom:1.1rem">
+        <div class="loading-ph"><span class="sp"></span> Loading ICIS headlines&#8230;</div>
+      </div>
+
+      <!-- ── WATER & AI ──────────────────────────────────────────────── -->
       <div class="sec-hd">Water &amp; Environmental</div>
-      <div id="water-cards"><div class="loading-ph"><span class="sp"></span>Loading EA river gauge data…</div></div>
+      <div id="water-cards"><div class="loading-ph"><span class="sp"></span>Loading EA river gauge data&#8230;</div></div>
       <div style="margin-top:.75rem">
         <div class="sec-hd">AI Market Analysis</div>
         <div class="card">
-          <textarea class="ai-inp" id="mkq" rows="2" placeholder='e.g. "How does current ethanol pricing affect bioethanol vs petrochem margins?" or "Explain what's driving TTF gas prices."'></textarea>
-          <div style="margin-top:.35rem"><button class="ai-btn" style="width:auto;padding:.38rem .9rem" onclick="ask('mkq','mkr')">Analyse →</button></div>
+          <textarea class="ai-inp" id="mkq" rows="2" placeholder="e.g. How does the current NBP gas price affect UK chlor-alkali margins? What&#39;s driving naphtha?"></textarea>
+          <div style="margin-top:.35rem"><button class="ai-btn" style="width:auto;padding:.38rem .9rem" onclick="ask('mkq','mkr')">Analyse &#8594;</button></div>
           <div class="ai-resp" id="mkr" style="margin-top:.5rem"></div>
         </div>
       </div>
+
     </div>
   </div>
 
@@ -836,6 +873,72 @@ nav::-webkit-scrollbar{display:none}
     </div>
   </div>
 
+  <!-- ═══ WEATHER ═══ -->
+  <div class="page" id="pg-weather" style="flex-direction:column;overflow-y:auto">
+    <div class="fp" style="max-width:1100px;margin:0 auto;width:100%;padding:1.25rem">
+
+      <!-- Header -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;flex-wrap:wrap;gap:.5rem">
+        <div>
+          <div class="page-ti">Saltend Chemicals Park — Weather</div>
+          <div class="page-sub">53.732°N 0.224°W · Humber Estuary · Open-Meteo · Updates hourly · Free &amp; no API key</div>
+        </div>
+        <button class="ai-btn" style="width:auto;padding:.35rem .9rem" onclick="loadWeather(true)">&#8635; Refresh</button>
+      </div>
+
+      <!-- Current conditions row -->
+      <div id="wx-current" style="display:grid;grid-template-columns:auto 1fr 1fr 1fr 1fr 1fr;gap:.75rem;margin-bottom:1.25rem;align-items:center">
+        <div style="text-align:center;padding:.75rem 1.25rem;background:var(--bg2);border:1px solid var(--b1);border-radius:10px">
+          <div id="wx-icon" style="font-size:3rem;line-height:1">--</div>
+          <div id="wx-desc" style="font-size:.7rem;color:var(--mid);margin-top:.25rem">Loading...</div>
+        </div>
+        <div class="wx-kpi" id="wx-temp"></div>
+        <div class="wx-kpi" id="wx-wind"></div>
+        <div class="wx-kpi" id="wx-humidity"></div>
+        <div class="wx-kpi" id="wx-pressure"></div>
+        <div class="wx-kpi" id="wx-precip"></div>
+      </div>
+
+      <!-- Wind alert banner -->
+      <div id="wx-alert" style="display:none;margin-bottom:1rem"></div>
+
+      <!-- Ops relevance cards -->
+      <div id="wx-ops" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.75rem;margin-bottom:1.25rem"></div>
+
+      <!-- 24h hourly chart -->
+      <div style="background:var(--bg2);border:1px solid var(--b1);border-radius:10px;padding:1rem;margin-bottom:1.25rem">
+        <div style="font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--mid);margin-bottom:.75rem">24-Hour Forecast</div>
+        <div id="wx-hourly-chart" style="overflow-x:auto"></div>
+      </div>
+
+      <!-- 7 day forecast -->
+      <div style="background:var(--bg2);border:1px solid var(--b1);border-radius:10px;padding:1rem;margin-bottom:1.25rem">
+        <div style="font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--mid);margin-bottom:.75rem">7-Day Outlook</div>
+        <div id="wx-daily" style="display:grid;grid-template-columns:repeat(7,1fr);gap:.5rem"></div>
+      </div>
+
+      <!-- Wind rose / direction chart -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:1.25rem">
+        <div style="background:var(--bg2);border:1px solid var(--b1);border-radius:10px;padding:1rem">
+          <div style="font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--mid);margin-bottom:.75rem">Wind Speed — Next 24h (mph)</div>
+          <div id="wx-wind-chart" style="height:80px;display:flex;align-items:flex-end;gap:2px"></div>
+          <div id="wx-wind-times" style="display:flex;gap:2px;margin-top:3px"></div>
+        </div>
+        <div style="background:var(--bg2);border:1px solid var(--b1);border-radius:10px;padding:1rem">
+          <div style="font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--mid);margin-bottom:.75rem">Temperature — Next 24h (°C)</div>
+          <div id="wx-temp-chart" style="height:80px;display:flex;align-items:flex-end;gap:2px"></div>
+          <div id="wx-temp-times" style="display:flex;gap:2px;margin-top:3px"></div>
+        </div>
+      </div>
+
+      <div style="font-size:.6rem;color:var(--dim);text-align:center">
+        Source: <a href="https://open-meteo.com" target="_blank" style="color:var(--teal)">Open-Meteo</a> ·
+        Models: ECMWF IFS + UK Met Office · Free &amp; open source · No API key required ·
+        Saltend Chemicals Park, Humber Estuary, East Yorkshire
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <script>
@@ -875,9 +978,9 @@ const FALLBACK_SITES=[
 ];
 
 const TICKS=[
-  {n:'TTF Gas',v:'€38.40/MWh',c:'+4.2%',up:true},{n:'UK NBP',v:'71.2p/th',c:'+3.8%',up:true},
+  {n:'TTF Gas',v:'€38.40/MWh',c:'+4.2%',up:true},{n:'UK NBP',v:'151.1p/th',c:'indicative',fl:true},
   {n:'EU ETS',v:'€64.80/tCO₂',c:'-1.1%',up:false},{n:'UK Power',v:'£89.50/MWh',c:'+2.8%',up:true},
-  {n:'Brent',v:'$82.40/bbl',c:'-0.6%',up:false},{n:'Ethanol UK',v:'£640/mt',c:'+1.9%',up:true},
+  {n:'Brent',v:'$73.20/bbl',c:'indicative',fl:true},{n:'Ethanol UK',v:'£640/mt',c:'+1.9%',up:true},
   {n:'Ethylene NWE',v:'$780/mt',c:'+1.4%',up:true},{n:'Propylene',v:'$710/mt',c:'Flat',fl:true},
   {n:'Benzene ARA',v:'$820/mt',c:'-0.9%',up:false},{n:'Ammonia',v:'$390/mt',c:'-2.1%',up:false},
 ];
@@ -898,8 +1001,10 @@ document.querySelectorAll('.ntab').forEach(t=>{
     document.getElementById('pg-'+t.dataset.p).classList.add('act');
     if(t.dataset.p==='map'&&!mapReady)initMap();
     if(t.dataset.p==='planning'&&!allPlan.length)loadPlanning();
+    if(t.dataset.p==='markets'&&!marketsLoaded)loadMarkets();
     if(t.dataset.p==='repd'&&!repdLoaded)loadREPD();
     if(t.dataset.p==='tec'&&!tecDataLoaded)loadTEC();
+    if(t.dataset.p==='weather'&&!wxLoaded)loadWeather();
     if(t.dataset.p==='ccgt')loadCCGT();
     if(t.dataset.p==='grid')loadGrid();
   });
@@ -986,18 +1091,43 @@ async function loadEnergy(){
     if(!r.ok)throw new Error('energy API '+r.status);
     const d=await r.json();
 
-    // Carbon intensity
+    // UK NBP Gas — live from OilPriceAPI if key set, otherwise keep static
+    if(d.nbp_gas){
+      const p=d.nbp_gas;
+      document.getElementById('kpi-nbp').innerHTML=`
+        <div class="kpi-l">UK NBP Gas (live)</div>
+        <div class="kpi-v">${Number(p.price).toFixed(1)}p <span class="kpi-u">/therm</span></div>
+        <div class="kpi-c" style="color:var(--green)">${p.date||''} · OilPriceAPI</div>`;
+    }
+
+    // TTF Gas — live from OilPriceAPI if key set
+    if(d.ttf_gas){
+      const p=d.ttf_gas;
+      document.getElementById('kpi-ttf').innerHTML=`
+        <div class="kpi-l">TTF Gas (live)</div>
+        <div class="kpi-v">€${Number(p.price).toFixed(2)} <span class="kpi-u">/MWh</span></div>
+        <div class="kpi-c" style="color:var(--green)">${p.date||''} · OilPriceAPI</div>`;
+    } else if(d.brent_crude && !d.ttf_gas){
+      // No OilPriceAPI key — show Brent in TTF slot as it's most useful live price we have
+      const b=d.brent_crude;
+      document.getElementById('kpi-ttf').innerHTML=`
+        <div class="kpi-l">Brent Crude (${b.source||'live'})</div>
+        <div class="kpi-v">$${Number(b.price).toFixed(2)} <span class="kpi-u">/bbl</span></div>
+        <div class="kpi-c" style="color:var(--mid)">${b.date||'Latest'} · ${b.source||'EIA'}</div>`;
+    }
+
+    // Carbon intensity — show in power slot
     if(d.carbon_intensity){
       const ci=d.carbon_intensity;
       const idxColor={low:'var(--green)',moderate:'var(--amber)',high:'var(--red)','very high':'var(--red)'}[ci.index]||'var(--mid)';
       document.getElementById('kpi-pwr').innerHTML=`
         <div class="kpi-l">UK Grid Carbon Intensity</div>
         <div class="kpi-v">${ci.actual||ci.forecast||'--'} <span class="kpi-u">gCO₂/kWh</span></div>
-        <div class="kpi-c" style="color:${idxColor}">${(ci.index||'').toUpperCase()} · Live from carbonintensity.org.uk</div>`;
+        <div class="kpi-c" style="color:${idxColor}">${(ci.index||'').toUpperCase()} · Live</div>`;
     }
 
-    // Grid demand & wind
-    if(d.grid){
+    // Grid demand — show in NBP slot only if no OilPriceAPI NBP data
+    if(d.grid && !d.nbp_gas){
       const g=d.grid;
       const demand=g.demand_mw?Math.round(g.demand_mw).toLocaleString():'--';
       const wind=g.wind_forecast_mw?Math.round(g.wind_forecast_mw).toLocaleString():'--';
@@ -1007,24 +1137,200 @@ async function loadEnergy(){
         <div class="kpi-c" style="color:var(--mid)">Wind forecast: ${wind} MW · Live</div>`;
     }
 
-    // Brent crude
-    if(d.brent_crude){
-      const b=d.brent_crude;
-      document.getElementById('kpi-ttf').innerHTML=`
-        <div class="kpi-l">Brent Crude ${b.note?'(indicative)':'(EIA live)'}</div>
-        <div class="kpi-v">$${Number(b.price).toFixed(2)} <span class="kpi-u">/bbl</span></div>
-        <div class="kpi-c" style="color:var(--mid)">${b.date||'Latest'} · EIA</div>`;
-    }
-
-    // Yorkshire carbon intensity
-    if(d.yorkshire_intensity){
-      const yi=d.yorkshire_intensity;
-      console.log('Yorkshire grid carbon:',yi.intensity,'gCO₂/kWh',yi.index);
-    }
-
   }catch(e){
     console.warn('Energy API error:',e.message);
   }
+}
+
+// ═══════════ MARKETS ═══════════
+
+let marketsLoaded = false;
+
+async function loadMarkets(force = false) {
+  if (marketsLoaded && !force) return;
+
+  try {
+    const r = await fetch('/api/markets', { signal: AbortSignal.timeout(24000) });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+
+    renderEnergyGrid(d.energy || {}, d.meta);
+    renderChemGrid(d.indicative || {}, d.headlines || []);
+    renderMetalsGrid(d.metals || {}, d.meta);
+    renderIcisHeadlines(d.headlines || []);
+    marketsLoaded = true;
+  } catch(e) {
+    // Show error state but keep indicative values
+    document.getElementById('mkt-energy-grid').innerHTML =
+      `<div class="card" style="grid-column:1/-1;color:var(--red);font-size:.75rem">Markets API error: ${e.message}</div>`;
+    renderChemGrid({
+      caustic_soda:{price:310,unit:'€/mt',label:'Caustic Soda (NWE)',updated:'Q1 2026',source:'ICIS'},
+      sulphuric_acid:{price:130,unit:'€/mt',label:'Sulphuric Acid (Europe)',updated:'Q1 2026',source:'ICIS'},
+      ethanol_uk:{price:650,unit:'£/mt',label:'Ethanol Denatured (UK)',updated:'Q1 2026',source:'ICIS'},
+      methanol_nwe:{price:380,unit:'€/mt',label:'Methanol (NWE)',updated:'Q1 2026',source:'ICIS'},
+      ethylene_nwe:{price:780,unit:'$/mt',label:'Ethylene (NWE)',updated:'Q1 2026',source:'ICIS'},
+      propylene_nwe:{price:710,unit:'$/mt',label:'Propylene (NWE)',updated:'Q1 2026',source:'ICIS'},
+      benzene_ara:{price:820,unit:'$/mt',label:'Benzene (ARA)',updated:'Q1 2026',source:'ICIS'},
+      ammonia_bs:{price:310,unit:'$/mt',label:'Ammonia (Black Sea FOB)',updated:'Q1 2026',source:'ICIS'},
+      naphtha_nwe:{price:620,unit:'$/mt',label:'Naphtha (NWE)',updated:'Q1 2026',source:'ICIS'},
+      hydrogen_uk:{price:6.50,unit:'£/kg',label:'Hydrogen (UK grey)',updated:'Q1 2026',source:'ICIS'},
+      saf_nwe:{price:1800,unit:'$/mt',label:'SAF (NW Europe)',updated:'Q1 2026',source:'Argus'},
+      co2_food:{price:250,unit:'€/mt',label:'CO₂ Food Grade',updated:'Q1 2026',source:'Market'},
+      chlorine_nwe:{price:290,unit:'€/mt',label:'Chlorine (W. Europe)',updated:'Q1 2026',source:'ICIS'},
+    }, []);
+  }
+}
+
+function renderEnergyGrid(e, meta) {
+  const live = meta?.has_oil_key;
+  const badge = document.getElementById('mkt-energy-badge');
+  if (badge) {
+    badge.textContent = live ? '● Live · OilPriceAPI' : 'Add OILPRICE_API_KEY for live';
+    badge.style.background = live ? 'rgba(34,197,94,.12)' : 'rgba(239,68,68,.12)';
+    badge.style.color = live ? 'var(--green)' : 'var(--red)';
+  }
+
+  const fmt = (v, dec=2) => v != null ? Number(v).toFixed(dec) : '—';
+  const indic = '<span style="font-size:.6rem;color:var(--amber)">indicative</span>';
+
+  const cards = [
+    {
+      id: 'DUTCH_TTF_EUR', label: 'TTF Gas (Europe)', unit: 'EUR/MWh',
+      fallback: '38.40', fallbackUnit: '€/MWh',
+      render: d => `€${fmt(d.price)} <span class="card-u">/MWh</span>`,
+      col: '#ef4444'
+    },
+    {
+      id: 'NATURAL_GAS_GBP', label: 'UK NBP Gas', unit: 'GBp/therm',
+      fallback: '151.1', fallbackUnit: 'p/therm',
+      render: d => `${fmt(d.price,1)}p <span class="card-u">/therm</span>`,
+      col: '#f59e0b'
+    },
+    {
+      id: 'BRENT_CRUDE_USD', label: 'Brent Crude', unit: 'USD/bbl',
+      fallback: '73.20', fallbackUnit: '$/bbl',
+      render: d => `$${fmt(d.price)} <span class="card-u">/bbl</span>`,
+      col: '#6b7280'
+    },
+    {
+      id: 'EU_CARBON_EUR', label: 'EU ETS Carbon', unit: 'EUR/tCO₂',
+      fallback: '64.80', fallbackUnit: '€/tCO₂',
+      render: d => `€${fmt(d.price)} <span class="card-u">/tCO₂</span>`,
+      col: '#a78bfa'
+    },
+    {
+      id: 'ETHANOL_USD', label: 'Fuel Ethanol (US)', unit: 'USD/gal',
+      fallback: '1.85', fallbackUnit: '$/gal',
+      render: d => `$${fmt(d.price,3)} <span class="card-u">/gal</span>`,
+      col: '#0891b2'
+    },
+    {
+      id: 'JET_FUEL_USD', label: 'Jet Fuel / SAF proxy', unit: 'USD/gal',
+      fallback: '2.80', fallbackUnit: '$/gal',
+      render: d => `$${fmt(d.price,3)} <span class="card-u">/gal</span>`,
+      col: '#059669'
+    },
+  ];
+
+  const grid = document.getElementById('mkt-energy-grid');
+  if (!grid) return;
+  grid.innerHTML = cards.map(card => {
+    const data = e[card.id];
+    const isLive = !!data;
+    const valHtml = isLive ? card.render(data) : `${card.fallback} <span class="card-u">${card.fallbackUnit.replace(/[^a-z%\/₂]/gi,'').slice(0,6)}</span>`;
+    const srcHtml = isLive
+      ? `<span style="color:var(--green);font-size:.6rem">● Live · ${data.date || 'today'}</span>`
+      : indic;
+    return `<div class="card" style="border-top:2px solid ${card.col}22">
+      <div class="card-ti">${card.label}</div>
+      <div class="card-v">${valHtml}</div>
+      <div class="card-c">${srcHtml}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderChemGrid(ind, headlines) {
+  // Build a signal map from ICIS headlines
+  const signals = {};
+  headlines.forEach(h => { signals[h.commodity] = h.signal; });
+
+  const sigIcon = sig => sig === 'up' ? '<span class="up">↑</span>' : sig === 'down' ? '<span class="dn">↓</span>' : '<span class="fl">→</span>';
+
+  const grid = document.getElementById('mkt-chem-grid');
+  if (!grid) return;
+  grid.innerHTML = Object.entries(ind).map(([key, d]) => {
+    const commodity = d.label.split(' ')[0]; // first word for signal lookup
+    const sig = signals[commodity] || signals[d.label] || 'neutral';
+    return `<div class="card" style="border-top:2px solid rgba(217,119,6,.25)">
+      <div class="card-ti">${d.label}</div>
+      <div class="card-v">${d.price} <span class="card-u">${d.unit}</span></div>
+      <div class="card-c">
+        ${sigIcon(sig)}
+        <span style="color:var(--amber);font-size:.6rem">Indicative · ${d.source} · ${d.updated}</span>
+        ${sig !== 'neutral' ? '<span style="font-size:.58rem;color:var(--mid)"> · ICIS signal</span>' : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderMetalsGrid(metals, meta) {
+  const live = meta?.has_metals_key;
+  const badge = document.getElementById('mkt-metals-badge');
+  if (badge) {
+    badge.textContent = live ? '● Live · metals.dev' : 'Add METALS_DEV_API_KEY for live (free)';
+    badge.style.background = live ? 'rgba(34,197,94,.12)' : 'rgba(239,68,68,.12)';
+    badge.style.color = live ? 'var(--green)' : 'var(--red)';
+  }
+
+  const FALLBACK = {
+    XPD: { label: 'Palladium', price: 980,  note: 'Key catalyst — hydrogenation, reforming' },
+    XPT: { label: 'Platinum',  price: 960,  note: 'Catalytic converters, H₂ fuel cells' },
+    XRH: { label: 'Rhodium',   price: 4800, note: 'Automotive catalysis, nitric acid' },
+    XAU: { label: 'Gold',      price: 3100, note: 'Reference precious metal' },
+  };
+
+  const grid = document.getElementById('mkt-metals-grid');
+  if (!grid) return;
+  const metalCols = { XPD:'#22d3ee', XPT:'#94a3b8', XRH:'#f97316', XAU:'#f59e0b' };
+
+  grid.innerHTML = Object.entries(FALLBACK).map(([code, fb]) => {
+    const data = metals[code];
+    const price = data ? Number(data.price).toLocaleString('en-GB', {maximumFractionDigits:0}) : fb.price.toLocaleString();
+    const srcHtml = data
+      ? `<span style="color:var(--green);font-size:.6rem">● Live · metals.dev</span>`
+      : `<span style="color:var(--amber);font-size:.6rem">indicative</span>`;
+    return `<div class="card" style="border-top:2px solid ${metalCols[code]}44">
+      <div class="card-ti">${fb.label} <span style="color:var(--dim);font-weight:400">(${code})</span></div>
+      <div class="card-v">$${price} <span class="card-u">/troy oz</span></div>
+      <div class="card-c">${srcHtml}</div>
+      <div style="font-size:.62rem;color:var(--dim);margin-top:.3rem;line-height:1.4">${fb.note}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderIcisHeadlines(headlines) {
+  const el = document.getElementById('mkt-icis-headlines');
+  if (!el) return;
+  if (!headlines.length) {
+    el.innerHTML = '<div style="font-size:.72rem;color:var(--mid);padding:.5rem 0">No ICIS headlines available — ICIS RSS may be rate-limited. <a href="https://www.icis.com/explore/resources/news/" target="_blank" style="color:var(--teal)">Browse ICIS news →</a></div>';
+    return;
+  }
+  const sigStyle = s => s==='up'?'color:var(--green)':s==='down'?'color:var(--red)':'color:var(--mid)';
+  const sigIcon  = s => s==='up'?'↑':s==='down'?'↓':'→';
+  el.innerHTML = `<div style="display:flex;flex-direction:column;gap:.35rem">` +
+    headlines.map(h => `
+      <div style="display:flex;align-items:flex-start;gap:.6rem;padding:.5rem .65rem;background:var(--bg2);border:1px solid var(--b1);border-radius:6px;cursor:pointer"
+           onclick="window.open('${h.link||'https://www.icis.com/explore/resources/news/'}','_blank')">
+        <span style="${sigStyle(h.signal)};font-size:.8rem;flex-shrink:0;line-height:1.4">${sigIcon(h.signal)}</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:.65rem;font-weight:700;color:var(--teal);text-transform:uppercase;letter-spacing:.04em;margin-bottom:.15rem">${h.commodity}</div>
+          <div style="font-size:.73rem;color:var(--text);line-height:1.45">${h.title}</div>
+          ${h.date ? `<div style="font-size:.6rem;color:var(--dim);margin-top:.15rem">${new Date(h.date).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}</div>` : ''}
+        </div>
+      </div>`).join('') +
+    `</div><div style="font-size:.6rem;color:var(--dim);margin-top:.5rem;text-align:right">
+      Source: <a href="https://www.icis.com/explore/resources/news/" target="_blank" style="color:var(--teal)">ICIS News RSS</a> · Chemical price-relevant headlines only
+    </div>`;
 }
 
 // ═══════════ RIVER DATA ═══════════
@@ -1847,6 +2153,7 @@ window.addEventListener('load',()=>{
   loadGrid();
   initHistDates();
   loadSaltendWeather();
+  loadMarkets();
 });
 document.querySelector('[data-p="planning"]').addEventListener('click',()=>{if(!allPlan.length)loadPlanning();});
 document.querySelector('[data-p="regulatory"]').addEventListener('click',()=>{if(!document.querySelector('#reg-list .reg-item'))loadReg();});
@@ -1854,79 +2161,221 @@ document.querySelector('[data-p="ccgt"]').addEventListener('click',()=>{loadCCGT
 document.querySelector('[data-p="grid"]').addEventListener('click',()=>{loadGrid();});
 document.querySelector('[data-p="repd"]').addEventListener('click',()=>{if(!repdLoaded)loadREPD();});
 document.querySelector('[data-p="tec"]').addEventListener('click',()=>{if(!tecDataLoaded)loadTEC();});
+document.querySelector('[data-p="weather"]').addEventListener('click',()=>{if(!wxLoaded)loadWeather();});
 
 // ═══════════ SALTEND WEATHER ═══════════
+
+const WX_LAT = 53.732, WX_LON = -0.224;
+let wxLoaded = false;
+
+// Shared helpers
+const wmoIcon = c => c===0?'☀️':c<=2?'⛅':c===3?'☁️':c<=49?'🌫️':c<=59?'🌦️':c<=69?'🌧️':c<=79?'🌨️':c<=84?'🌧️':c<=99?'⛈️':'🌡️';
+const wmoDesc = c => c===0?'Clear sky':c===1?'Mainly clear':c===2?'Partly cloudy':c===3?'Overcast':c<=49?'Fog':c<=59?'Drizzle':c<=69?'Rain':c<=79?'Snow':c<=84?'Rain showers':c<=99?'Thunderstorm':'Unknown';
+const windDir = d => ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'][Math.round(d/22.5)%16];
+const windBft = mph => mph<1?'Calm':mph<7?'Light air':mph<12?'Light breeze':mph<18?'Gentle breeze':mph<24?'Moderate':mph<31?'Fresh':mph<38?'Strong':mph<46?'Near gale':mph<54?'Gale':'Storm';
+
+// Mini sidebar widget (always loads on page load)
 async function loadSaltendWeather() {
   const el = document.getElementById('saltend-weather');
   try {
-    // Open-Meteo — free, no API key, CORS-friendly
-    // Saltend Chemicals Park: 53.732°N, -0.224°E
-    const url = 'https://api.open-meteo.com/v1/forecast' +
-      '?latitude=53.732&longitude=-0.224' +
-      '&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m,relative_humidity_2m,precipitation' +
-      '&hourly=temperature_2m,wind_speed_10m' +
-      '&forecast_days=1&wind_speed_unit=mph&timezone=Europe%2FLondon';
-
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${WX_LAT}&longitude=${WX_LON}&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m,relative_humidity_2m,precipitation&forecast_days=1&wind_speed_unit=mph&timezone=Europe%2FLondon`;
     const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    if (!r.ok) throw new Error('HTTP '+r.status);
     const d = await r.json();
-    const c = d.current;
-
-    const wmoIcon = code => {
-      if (code === 0)            return '☀️';
-      if (code <= 2)             return '⛅';
-      if (code === 3)            return '☁️';
-      if (code <= 49)            return '🌫️';
-      if (code <= 59)            return '🌦️';
-      if (code <= 69)            return '🌧️';
-      if (code <= 79)            return '🌨️';
-      if (code <= 84)            return '🌧️';
-      if (code <= 99)            return '⛈️';
-      return '🌡️';
-    };
-    const wmoDesc = code => {
-      if (code === 0)            return 'Clear sky';
-      if (code === 1)            return 'Mainly clear';
-      if (code === 2)            return 'Partly cloudy';
-      if (code === 3)            return 'Overcast';
-      if (code <= 49)            return 'Foggy';
-      if (code <= 59)            return 'Drizzle';
-      if (code <= 69)            return 'Rain';
-      if (code <= 79)            return 'Snow';
-      if (code <= 84)            return 'Rain showers';
-      if (code <= 99)            return 'Thunderstorm';
-      return 'Unknown';
-    };
-    const windDir = deg => {
-      const dirs = ['N','NE','E','SE','S','SW','W','NW'];
-      return dirs[Math.round(deg/45) % 8];
-    };
-
-    // Wind alert for chemical operations (>25 mph operationally significant)
-    const windAlert = c.wind_speed_10m >= 35
-      ? `<div style="margin-top:.4rem;padding:.3rem .5rem;background:rgba(239,68,68,.12);border-left:2px solid var(--red);border-radius:3px;font-size:.65rem;color:var(--red)">⚠ High wind — check flaring ops</div>`
-      : c.wind_speed_10m >= 25
-      ? `<div style="margin-top:.4rem;padding:.3rem .5rem;background:rgba(251,191,36,.1);border-left:2px solid var(--amber);border-radius:3px;font-size:.65rem;color:var(--amber)">⚠ Elevated wind speed</div>`
-      : '';
-
+    const cur = d.current;
+    const windAlert = cur.wind_speed_10m >= 35
+      ? `<div style="margin-top:.3rem;padding:.2rem .4rem;background:rgba(220,38,38,.1);border-left:2px solid var(--red);font-size:.62rem;color:var(--red)">⚠ High wind — check flaring</div>`
+      : cur.wind_speed_10m >= 25
+      ? `<div style="margin-top:.3rem;padding:.2rem .4rem;background:rgba(217,119,6,.1);border-left:2px solid var(--amber);font-size:.62rem;color:var(--amber)">⚠ Elevated winds</div>` : '';
     el.innerHTML = `
-      <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.4rem">
-        <span style="font-size:1.6rem;line-height:1">${wmoIcon(c.weather_code)}</span>
-        <div>
-          <div style="font-family:var(--mono);font-size:1.1rem;font-weight:500;color:var(--text)">${c.temperature_2m.toFixed(1)}°C</div>
-          <div style="color:var(--mid);font-size:.65rem">${wmoDesc(c.weather_code)} · feels ${c.apparent_temperature.toFixed(0)}°C</div>
+      <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.35rem">
+        <span style="font-size:1.5rem">${wmoIcon(cur.weather_code)}</span>
+        <div><div style="font-family:var(--mono);font-size:1rem;font-weight:500;color:var(--text)">${cur.temperature_2m.toFixed(1)}°C</div>
+          <div style="color:var(--mid);font-size:.62rem">${wmoDesc(cur.weather_code)} · feels ${cur.apparent_temperature.toFixed(0)}°C</div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.15rem .5rem;font-size:.65rem">
+        <div><span style="color:var(--mid)">Wind</span> <span style="font-family:var(--mono)">${cur.wind_speed_10m.toFixed(0)} mph ${windDir(cur.wind_direction_10m)}</span></div>
+        <div><span style="color:var(--mid)">Humidity</span> <span style="font-family:var(--mono)">${cur.relative_humidity_2m}%</span></div>
+        <div><span style="color:var(--mid)">Precip</span> <span style="font-family:var(--mono)">${cur.precipitation} mm</span></div>
+        <div><span style="color:var(--mid)">Bft</span> <span style="font-family:var(--mono)">${windBft(cur.wind_speed_10m)}</span></div>
+      </div>${windAlert}
+      <div style="font-size:.57rem;color:var(--dim);margin-top:.3rem">Open-Meteo · hourly update</div>`;
+  } catch(e) { if(el) el.innerHTML = '<span style="color:var(--red)">Unavailable</span>'; }
+}
+
+// Full weather page
+async function loadWeather(force=false) {
+  if (wxLoaded && !force) return;
+  const setEl = (id, html) => { const e=document.getElementById(id); if(e) e.innerHTML=html; };
+
+  // Show loading state
+  ['wx-temp','wx-wind','wx-humidity','wx-pressure','wx-precip'].forEach(id =>
+    setEl(id, '<div class="wx-kpi-l">--</div><div class="wx-kpi-v" style="font-size:.9rem;color:var(--mid)"><span class="sp"></span></div>')
+  );
+
+  try {
+    // Fetch current + hourly (24h) + daily (7d) in one call
+    const url = [
+      `https://api.open-meteo.com/v1/forecast`,
+      `?latitude=${WX_LAT}&longitude=${WX_LON}`,
+      `&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m,`,
+      `wind_gusts_10m,relative_humidity_2m,precipitation,surface_pressure,visibility,uv_index,is_day`,
+      `&hourly=temperature_2m,weather_code,wind_speed_10m,wind_direction_10m,precipitation_probability,`,
+      `relative_humidity_2m,surface_pressure,visibility`,
+      `&daily=weather_code,temperature_2m_max,temperature_2m_min,wind_speed_10m_max,wind_gusts_10m_max,`,
+      `precipitation_sum,precipitation_probability_max,sunrise,sunset`,
+      `&wind_speed_unit=mph&timezone=Europe%2FLondon&forecast_days=7`
+    ].join('');
+
+    const r = await fetch(url, { signal: AbortSignal.timeout(10000) });
+    if (!r.ok) throw new Error('HTTP '+r.status);
+    const d = await r.json();
+    const cur = d.current;
+    const hourly = d.hourly;
+    const daily  = d.daily;
+    const nowHour = new Date(cur.time).getHours();
+
+    // ── Current conditions ──────────────────────────────────────────────────
+    setEl('wx-icon', wmoIcon(cur.weather_code));
+    setEl('wx-desc', `${wmoDesc(cur.weather_code)} · ${cur.is_day ? 'Day' : 'Night'} · Updated ${cur.time.slice(11,16)}`);
+
+    setEl('wx-temp', `<div class="wx-kpi-l">Temperature</div><div class="wx-kpi-v">${cur.temperature_2m.toFixed(1)}°C</div><div class="wx-kpi-s">Feels like ${cur.apparent_temperature.toFixed(0)}°C</div>`);
+
+    const windCol = cur.wind_speed_10m >= 35 ? 'var(--red)' : cur.wind_speed_10m >= 25 ? 'var(--amber)' : 'var(--text)';
+    setEl('wx-wind', `<div class="wx-kpi-l">Wind</div><div class="wx-kpi-v" style="color:${windCol}">${cur.wind_speed_10m.toFixed(0)} mph</div><div class="wx-kpi-s">${windDir(cur.wind_direction_10m)} · Gusts ${cur.wind_gusts_10m?.toFixed(0)||'--'} mph · ${windBft(cur.wind_speed_10m)}</div>`);
+
+    setEl('wx-humidity', `<div class="wx-kpi-l">Humidity</div><div class="wx-kpi-v">${cur.relative_humidity_2m}%</div><div class="wx-kpi-s">Relative humidity</div>`);
+
+    setEl('wx-pressure', `<div class="wx-kpi-l">Pressure</div><div class="wx-kpi-v">${cur.surface_pressure?.toFixed(0)||'--'} hPa</div><div class="wx-kpi-s">${cur.surface_pressure > 1013 ? 'High pressure' : 'Low pressure'}</div>`);
+
+    setEl('wx-precip', `<div class="wx-kpi-l">Precipitation</div><div class="wx-kpi-v">${cur.precipitation} mm</div><div class="wx-kpi-s">UV index: ${cur.uv_index?.toFixed(0)||'--'} · Vis: ${cur.visibility ? (cur.visibility/1000).toFixed(0)+'km' : '--'}</div>`);
+
+    // ── Wind/ops alert banner ───────────────────────────────────────────────
+    const alertEl = document.getElementById('wx-alert');
+    if (alertEl) {
+      if (cur.wind_speed_10m >= 45) {
+        alertEl.style.display='block';
+        alertEl.innerHTML=`<div style="padding:.75rem 1rem;background:rgba(220,38,38,.1);border:1px solid var(--red);border-radius:8px;font-size:.78rem;color:var(--red);font-weight:600">🚨 STORM CONDITIONS — ${cur.wind_speed_10m.toFixed(0)} mph · Gusts ${cur.wind_gusts_10m?.toFixed(0)||'--'} mph · Review permit-to-work and outdoor operations at Saltend</div>`;
+      } else if (cur.wind_speed_10m >= 35) {
+        alertEl.style.display='block';
+        alertEl.innerHTML=`<div style="padding:.75rem 1rem;background:rgba(220,38,38,.08);border:1px solid rgba(220,38,38,.4);border-radius:8px;font-size:.75rem;color:var(--red)">⚠️ HIGH WIND — ${cur.wind_speed_10m.toFixed(0)} mph · Direction: ${windDir(cur.wind_direction_10m)} · Check flaring operations and jetty loading procedures</div>`;
+      } else if (cur.wind_speed_10m >= 25) {
+        alertEl.style.display='block';
+        alertEl.innerHTML=`<div style="padding:.75rem 1rem;background:rgba(217,119,6,.08);border:1px solid rgba(217,119,6,.35);border-radius:8px;font-size:.75rem;color:var(--amber)">⚡ ELEVATED WIND — ${cur.wind_speed_10m.toFixed(0)} mph ${windDir(cur.wind_direction_10m)} · Monitor for operational impact</div>`;
+      } else if (cur.visibility < 1000) {
+        alertEl.style.display='block';
+        alertEl.innerHTML=`<div style="padding:.75rem 1rem;background:rgba(100,116,139,.1);border:1px solid var(--b1);border-radius:8px;font-size:.75rem;color:var(--text)">🌫️ LOW VISIBILITY — ${(cur.visibility/1000).toFixed(1)} km · Fog/mist conditions — check jetty and road loading procedures</div>`;
+      } else {
+        alertEl.style.display='none';
+      }
+    }
+
+    // ── Operational relevance cards ─────────────────────────────────────────
+    const precip24h = hourly.precipitation_probability?.slice(nowHour, nowHour+24) || [];
+    const maxRainProb = Math.max(...precip24h.filter(Boolean));
+    const ops = [
+      {
+        title: 'Flaring Ops',
+        icon: '🔥',
+        status: cur.wind_speed_10m >= 35 ? 'alert' : cur.wind_speed_10m >= 20 ? 'warn' : 'ok',
+        value: `Wind ${cur.wind_speed_10m.toFixed(0)} mph ${windDir(cur.wind_direction_10m)}`,
+        note: cur.wind_speed_10m >= 35 ? 'High wind — review flare operations' : cur.wind_speed_10m >= 20 ? 'Monitor flare tip clearance' : 'Normal conditions'
+      },
+      {
+        title: 'Jetty Loading',
+        icon: '⚓',
+        status: cur.wind_speed_10m >= 40 ? 'alert' : cur.wind_speed_10m >= 28 ? 'warn' : 'ok',
+        value: `Gusts ${cur.wind_gusts_10m?.toFixed(0)||cur.wind_speed_10m.toFixed(0)} mph`,
+        note: cur.wind_speed_10m >= 40 ? 'Check berthing safety limits' : cur.wind_speed_10m >= 28 ? 'Monitor — approach berth limits' : 'Within normal limits'
+      },
+      {
+        title: 'Precipitation',
+        icon: '🌧️',
+        status: maxRainProb > 70 ? 'warn' : 'ok',
+        value: `${cur.precipitation} mm now`,
+        note: maxRainProb > 70 ? `${maxRainProb}% chance rain next 24h` : `Max ${maxRainProb}% rain probability`
+      },
+    ];
+    const opsColors = { ok:'var(--green)', warn:'var(--amber)', alert:'var(--red)' };
+    setEl('wx-ops', ops.map(o => `
+      <div class="wx-ops-card" style="border-left:3px solid ${opsColors[o.status]}">
+        <div style="display:flex;align-items:center;gap:.4rem;margin-bottom:.3rem">
+          <span>${o.icon}</span>
+          <span style="font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--mid)">${o.title}</span>
+          <span style="margin-left:auto;font-size:.6rem;font-weight:700;color:${opsColors[o.status]}">${o.status.toUpperCase()}</span>
         </div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.2rem .6rem">
-        <div><span style="color:var(--mid)">Wind</span> <span style="color:var(--text);font-family:var(--mono)">${c.wind_speed_10m.toFixed(0)} mph ${windDir(c.wind_direction_10m)}</span></div>
-        <div><span style="color:var(--mid)">Humidity</span> <span style="color:var(--text);font-family:var(--mono)">${c.relative_humidity_2m}%</span></div>
-        <div><span style="color:var(--mid)">Precip</span> <span style="color:var(--text);font-family:var(--mono)">${c.precipitation} mm</span></div>
-        <div><span style="color:var(--mid)">Lat/Lng</span> <span style="color:var(--dim);font-size:.62rem">53.73°N 0.22°W</span></div>
-      </div>
-      ${windAlert}
-      <div style="font-size:.58rem;color:var(--dim);margin-top:.4rem">Open-Meteo · updates hourly</div>`;
+        <div style="font-family:var(--mono);font-size:.9rem;color:var(--text);margin-bottom:.2rem">${o.value}</div>
+        <div style="font-size:.68rem;color:var(--mid)">${o.note}</div>
+      </div>`).join(''));
+
+    // ── 24h hourly table ────────────────────────────────────────────────────
+    const hours24 = Array.from({length:24}, (_,i) => (nowHour+i) % hourly.time.length);
+    setEl('wx-hourly-chart', `<table style="width:100%;border-collapse:collapse;font-size:.65rem;min-width:600px">
+      <tr style="color:var(--mid)">
+        ${hours24.map(i=>`<td style="text-align:center;padding:.2rem .15rem;border-bottom:1px solid var(--b1)">${hourly.time[i].slice(11,16)}</td>`).join('')}
+      </tr>
+      <tr style="font-size:.85rem">
+        ${hours24.map(i=>`<td style="text-align:center;padding:.2rem .15rem">${wmoIcon(hourly.weather_code[i])}</td>`).join('')}
+      </tr>
+      <tr style="font-family:var(--mono)">
+        ${hours24.map(i=>`<td style="text-align:center;padding:.2rem .15rem;color:var(--text)">${hourly.temperature_2m[i].toFixed(0)}°</td>`).join('')}
+      </tr>
+      <tr style="font-family:var(--mono)">
+        ${hours24.map(i=>`<td style="text-align:center;padding:.2rem .15rem;color:var(--teal)">${hourly.wind_speed_10m[i].toFixed(0)}</td>`).join('')}
+      </tr>
+      <tr style="color:var(--mid)">
+        ${hours24.map(i=>`<td style="text-align:center;padding:.2rem .15rem">${hourly.wind_direction_10m?windDir(hourly.wind_direction_10m[i]):''}</td>`).join('')}
+      </tr>
+      <tr style="font-family:var(--mono)">
+        ${hours24.map(i=>`<td style="text-align:center;padding:.2rem .15rem;color:${(hourly.precipitation_probability?.[i]||0)>60?'var(--amber)':'var(--mid)'}">${hourly.precipitation_probability?.[i]||0}%</td>`).join('')}
+      </tr>
+      <tr style="color:var(--dim);font-size:.58rem">
+        <td colspan="24" style="padding:.3rem .15rem">🌡️ Temp (°C) &nbsp; 💨 Wind (mph) &nbsp; ↔ Direction &nbsp; 🌧️ Rain probability</td>
+      </tr>
+    </table>`);
+
+    // ── 7-day daily cards ───────────────────────────────────────────────────
+    const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    setEl('wx-daily', daily.time.map((dt,i) => {
+      const dow = days[new Date(dt).getDay()];
+      const isToday = i===0;
+      return `<div class="wx-day" style="${isToday?'border-color:var(--teal);background:rgba(6,182,212,.05)':''}">
+        <div style="font-size:.62rem;color:var(--mid);margin-bottom:.2rem">${isToday?'Today':dow}</div>
+        <div style="font-size:1.2rem">${wmoIcon(daily.weather_code[i])}</div>
+        <div style="font-family:var(--mono);font-size:.75rem;color:var(--text);margin:.2rem 0">${daily.temperature_2m_max[i].toFixed(0)}° <span style="color:var(--mid)">${daily.temperature_2m_min[i].toFixed(0)}°</span></div>
+        <div style="font-size:.6rem;color:var(--teal)">${daily.wind_speed_10m_max[i].toFixed(0)} mph</div>
+        <div style="font-size:.6rem;color:var(--mid)">${daily.precipitation_sum[i].toFixed(1)} mm</div>
+        <div style="font-size:.58rem;color:${daily.precipitation_probability_max[i]>60?'var(--amber)':'var(--dim)'}">${daily.precipitation_probability_max[i]}%</div>
+      </div>`;
+    }).join(''));
+
+    // ── Wind bar chart ──────────────────────────────────────────────────────
+    const windVals = hours24.map(i => hourly.wind_speed_10m[i]);
+    const maxWind = Math.max(...windVals, 1);
+    setEl('wx-wind-chart', windVals.map((v,i) => {
+      const pct = (v/maxWind)*100;
+      const col = v>=35?'var(--red)':v>=25?'var(--amber)':'var(--teal)';
+      return `<div style="flex:1;background:${col};height:${pct}%;border-radius:2px 2px 0 0;min-height:2px" title="${v.toFixed(0)} mph"></div>`;
+    }).join(''));
+    setEl('wx-wind-times', windVals.map((_,i) =>
+      `<div style="flex:1;font-size:.48rem;color:var(--dim);text-align:center">${i%6===0?hourly.time[hours24[i]].slice(11,16):''}</div>`
+    ).join(''));
+
+    // ── Temperature bar chart ───────────────────────────────────────────────
+    const tempVals = hours24.map(i => hourly.temperature_2m[i]);
+    const minTemp = Math.min(...tempVals), maxTemp = Math.max(...tempVals, minTemp+1);
+    setEl('wx-temp-chart', tempVals.map((v,i) => {
+      const pct = ((v-minTemp)/(maxTemp-minTemp))*85 + 10;
+      const col = v >= 25 ? 'var(--red)' : v >= 15 ? 'var(--amber)' : v >= 5 ? 'var(--teal)' : '#60a5fa';
+      return `<div style="flex:1;background:${col};height:${pct}%;border-radius:2px 2px 0 0;min-height:2px" title="${v.toFixed(1)}°C"></div>`;
+    }).join(''));
+    setEl('wx-temp-times', tempVals.map((_,i) =>
+      `<div style="flex:1;font-size:.48rem;color:var(--dim);text-align:center">${i%6===0?hourly.time[hours24[i]].slice(11,16):''}</div>`
+    ).join(''));
+
+    wxLoaded = true;
   } catch(e) {
-    el.innerHTML = `<span style="color:var(--red)">Weather unavailable</span>`;
+    setEl('wx-temp', `<div class="wx-kpi-l">Error</div><div style="color:var(--red);font-size:.75rem">${e.message}</div>`);
   }
 }
 
