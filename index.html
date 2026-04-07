@@ -343,8 +343,8 @@ nav::-webkit-scrollbar{display:none}
       </div>
     </div>
     <div class="fp">
-      <div class="page-ti">Chemical Industry News</div>
-      <div class="page-sub">Live from HSE, ECHA and Environment Agency RSS feeds</div>
+      <div class="page-ti">Industry News</div>
+      <div class="page-sub">Live from HSE · ECHA · Environment Agency · GOV.UK · Chemical Watch · CEFIC · Energy Institute</div>
       <div class="filter-row">
         <span class="fchip act" onclick="toggleNewsF('',this)">All</span>
         <span class="fchip" onclick="toggleNewsF('safety',this)">Safety</span>
@@ -664,17 +664,17 @@ nav::-webkit-scrollbar{display:none}
       </select>
       <span id="repd-count" style="margin-left:auto;font-size:.65rem;color:var(--mid)"></span>
       <button class="ai-btn" style="width:auto;padding:.25rem .75rem;margin-left:.25rem;font-size:.7rem" onclick="clearRepdFilters()" title="Remove all filters and show blank map">✕ Clear</button>
-      <button class="ai-btn" style="width:auto;padding:.25rem .75rem;margin-left:.25rem;font-size:.7rem" onclick="toggleRepdView()">⇄ Table</button>
+      <button class="ai-btn" style="width:auto;padding:.25rem .75rem;margin-left:.25rem;font-size:.7rem" onclick="toggleRepdView()">⇄ Map</button>
     </div>
 
     <!-- Map + table split -->
     <div style="flex:1;display:flex;min-height:0;position:relative">
 
       <!-- Map -->
-      <div id="repd-map" style="flex:1;min-height:0"></div>
+      <div id="repd-map" style="display:none;flex:1;min-height:0"></div>
 
       <!-- Table (hidden by default) -->
-      <div id="repd-table-wrap" style="display:none;flex:1;overflow-y:auto;padding:.75rem 1rem">
+      <div id="repd-table-wrap" style="display:block;flex:1;overflow-y:auto;padding:.75rem 1rem">
         <table id="repd-table" style="width:100%;border-collapse:collapse;font-size:.72rem">
           <thead>
             <tr style="border-bottom:2px solid var(--b1);text-align:left">
@@ -1168,13 +1168,13 @@ async function loadMarkets(force = false) {
       sulphuric_acid:{price:130,unit:'€/mt',label:'Sulphuric Acid (Europe)',updated:'Q1 2026',source:'ICIS'},
       ethanol_uk:{price:650,unit:'£/mt',label:'Ethanol Denatured (UK)',updated:'Q1 2026',source:'ICIS'},
       methanol_nwe:{price:380,unit:'€/mt',label:'Methanol (NWE)',updated:'Q1 2026',source:'ICIS'},
-      ethylene_nwe:{price:780,unit:'$/mt',label:'Ethylene (NWE)',updated:'Q1 2026',source:'ICIS'},
-      propylene_nwe:{price:710,unit:'$/mt',label:'Propylene (NWE)',updated:'Q1 2026',source:'ICIS'},
-      benzene_ara:{price:820,unit:'$/mt',label:'Benzene (ARA)',updated:'Q1 2026',source:'ICIS'},
-      ammonia_bs:{price:310,unit:'$/mt',label:'Ammonia (Black Sea FOB)',updated:'Q1 2026',source:'ICIS'},
-      naphtha_nwe:{price:620,unit:'$/mt',label:'Naphtha (NWE)',updated:'Q1 2026',source:'ICIS'},
+      ethylene_nwe:{price:615,unit:'£/mt',label:'Ethylene (NWE)',updated:'Q1 2026',source:'ICIS'},
+      propylene_nwe:{price:560,unit:'£/mt',label:'Propylene (NWE)',updated:'Q1 2026',source:'ICIS'},
+      benzene_ara:{price:645,unit:'£/mt',label:'Benzene (ARA)',updated:'Q1 2026',source:'ICIS'},
+      ammonia_bs:{price:245,unit:'£/mt',label:'Ammonia (NW Europe)',updated:'Q1 2026',source:'ICIS'},
+      naphtha_nwe:{price:490,unit:'£/mt',label:'Naphtha (NWE)',updated:'Q1 2026',source:'ICIS'},
       hydrogen_uk:{price:6.50,unit:'£/kg',label:'Hydrogen (UK grey)',updated:'Q1 2026',source:'ICIS'},
-      saf_nwe:{price:1800,unit:'$/mt',label:'SAF (NW Europe)',updated:'Q1 2026',source:'Argus'},
+      saf_nwe:{price:1420,unit:'£/mt',label:'SAF (NW Europe)',updated:'Q1 2026',source:'Argus'},
       co2_food:{price:250,unit:'€/mt',label:'CO₂ Food Grade',updated:'Q1 2026',source:'Market'},
       chlorine_nwe:{price:290,unit:'€/mt',label:'Chlorine (W. Europe)',updated:'Q1 2026',source:'ICIS'},
     }, []);
@@ -1189,59 +1189,34 @@ function renderEnergyGrid(e, meta) {
     badge.style.background = live ? 'rgba(34,197,94,.12)' : 'rgba(239,68,68,.12)';
     badge.style.color = live ? 'var(--green)' : 'var(--red)';
   }
-
-  const fmt = (v, dec=2) => v != null ? Number(v).toFixed(dec) : '—';
   const indic = '<span style="font-size:.6rem;color:var(--amber)">indicative</span>';
 
+  // Cards map to new GBP-converted keys from api/markets.js
   const cards = [
-    {
-      id: 'DUTCH_TTF_EUR', label: 'TTF Gas (Europe)', unit: 'EUR/MWh',
-      fallback: '38.40', fallbackUnit: '€/MWh',
-      render: d => `€${fmt(d.price)} <span class="card-u">/MWh</span>`,
-      col: '#ef4444'
-    },
-    {
-      id: 'NATURAL_GAS_GBP', label: 'UK NBP Gas', unit: 'GBp/therm',
-      fallback: '151.1', fallbackUnit: 'p/therm',
-      render: d => `${fmt(d.price,1)}p <span class="card-u">/therm</span>`,
-      col: '#f59e0b'
-    },
-    {
-      id: 'BRENT_CRUDE_USD', label: 'Brent Crude', unit: 'USD/bbl',
-      fallback: '73.20', fallbackUnit: '$/bbl',
-      render: d => `$${fmt(d.price)} <span class="card-u">/bbl</span>`,
-      col: '#6b7280'
-    },
-    {
-      id: 'EU_CARBON_EUR', label: 'EU ETS Carbon', unit: 'EUR/tCO₂',
-      fallback: '64.80', fallbackUnit: '€/tCO₂',
-      render: d => `€${fmt(d.price)} <span class="card-u">/tCO₂</span>`,
-      col: '#a78bfa'
-    },
-    {
-      id: 'ETHANOL_USD', label: 'Fuel Ethanol (US)', unit: 'USD/gal',
-      fallback: '1.85', fallbackUnit: '$/gal',
-      render: d => `$${fmt(d.price,3)} <span class="card-u">/gal</span>`,
-      col: '#0891b2'
-    },
-    {
-      id: 'JET_FUEL_USD', label: 'Jet Fuel / SAF proxy', unit: 'USD/gal',
-      fallback: '2.80', fallbackUnit: '$/gal',
-      render: d => `$${fmt(d.price,3)} <span class="card-u">/gal</span>`,
-      col: '#059669'
-    },
+    { key:'NBP',      label:'UK NBP Gas',        fallback:'151.1p', fallbackUnit:'GBp/therm', col:'#f59e0b',
+      render:d=>`${Number(d.price).toFixed(1)}p <span class="card-u">/therm</span>` },
+    { key:'TTF',      label:'TTF Gas (Europe)',   fallback:'EUR 38.40', fallbackUnit:'EUR/MWh',  col:'#ef4444',
+      render:d=>`€${Number(d.price).toFixed(2)} <span class="card-u">/MWh</span>` },
+    { key:'BRENT',    label:'Brent Crude',        fallback:'£57.80', fallbackUnit:'GBP/bbl',  col:'#6b7280',
+      render:d=>`£${Number(d.price).toFixed(2)} <span class="card-u">/bbl</span>` },
+    { key:'ETS',      label:'EU ETS Carbon',      fallback:'EUR 64.80', fallbackUnit:'EUR/tCO₂', col:'#a78bfa',
+      render:d=>`€${Number(d.price).toFixed(2)} <span class="card-u">/tCO₂</span>` },
+    { key:'ETHANOL',  label:'Ethanol (US, GBP)',  fallback:'£0.488', fallbackUnit:'GBP/litre', col:'#0891b2',
+      render:d=>`£${Number(d.price).toFixed(3)} <span class="card-u">/litre</span>` },
+    { key:'JET_FUEL', label:'Jet Fuel (SAF proxy)',fallback:'£0.738', fallbackUnit:'GBP/litre', col:'#059669',
+      render:d=>`£${Number(d.price).toFixed(3)} <span class="card-u">/litre</span>` },
   ];
 
   const grid = document.getElementById('mkt-energy-grid');
   if (!grid) return;
   grid.innerHTML = cards.map(card => {
-    const data = e[card.id];
+    const data = e[card.key];
     const isLive = !!data;
-    const valHtml = isLive ? card.render(data) : `${card.fallback} <span class="card-u">${card.fallbackUnit.replace(/[^a-z%\/₂]/gi,'').slice(0,6)}</span>`;
+    const valHtml = isLive ? card.render(data) : `${card.fallback} <span class="card-u"></span>`;
     const srcHtml = isLive
-      ? `<span style="color:var(--green);font-size:.6rem">● Live · ${data.date || 'today'}</span>`
+      ? `<span style="color:var(--green);font-size:.6rem">&#9679; Live · ${data.date||'today'} · OilPriceAPI</span>`
       : indic;
-    return `<div class="card" style="border-top:2px solid ${card.col}22">
+    return `<div class="card" style="border-top:2px solid ${card.col}44">
       <div class="card-ti">${card.label}</div>
       <div class="card-v">${valHtml}</div>
       <div class="card-c">${srcHtml}</div>
@@ -1283,10 +1258,10 @@ function renderMetalsGrid(metals, meta) {
   }
 
   const FALLBACK = {
-    XPD: { label: 'Palladium', price: 980,  note: 'Key catalyst — hydrogenation, reforming' },
-    XPT: { label: 'Platinum',  price: 960,  note: 'Catalytic converters, H₂ fuel cells' },
-    XRH: { label: 'Rhodium',   price: 4800, note: 'Automotive catalysis, nitric acid' },
-    XAU: { label: 'Gold',      price: 3100, note: 'Reference precious metal' },
+    XPD: { label: 'Palladium', price: 774,  note: 'Hydrogenation & reforming catalyst' },
+    XPT: { label: 'Platinum',  price: 757,  note: 'H₂ fuel cells, catalytic converters' },
+    XRH: { label: 'Rhodium',   price: 3785, note: 'Nitric acid production, auto catalysis' },
+    XAU: { label: 'Gold',      price: 2445, note: 'Reference precious metal' },
   };
 
   const grid = document.getElementById('mkt-metals-grid');
@@ -1295,15 +1270,16 @@ function renderMetalsGrid(metals, meta) {
 
   grid.innerHTML = Object.entries(FALLBACK).map(([code, fb]) => {
     const data = metals[code];
-    const price = data ? Number(data.price).toLocaleString('en-GB', {maximumFractionDigits:0}) : fb.price.toLocaleString();
+    const price = data ? Number(data.price).toLocaleString('en-GB',{maximumFractionDigits:0}) : fb.price.toLocaleString();
+    const currency = data ? 'GBP' : 'GBP est.';
     const srcHtml = data
-      ? `<span style="color:var(--green);font-size:.6rem">● Live · metals.dev</span>`
-      : `<span style="color:var(--amber);font-size:.6rem">indicative</span>`;
+      ? `<span style="color:var(--green);font-size:.6rem">&#9679; Live · metals.dev · GBP</span>`
+      : `<span style="color:var(--amber);font-size:.6rem">indicative GBP</span>`;
     return `<div class="card" style="border-top:2px solid ${metalCols[code]}44">
       <div class="card-ti">${fb.label} <span style="color:var(--dim);font-weight:400">(${code})</span></div>
-      <div class="card-v">$${price} <span class="card-u">/troy oz</span></div>
+      <div class="card-v">£${price} <span class="card-u">/troy oz</span></div>
       <div class="card-c">${srcHtml}</div>
-      <div style="font-size:.62rem;color:var(--dim);margin-top:.3rem;line-height:1.4">${fb.note}</div>
+      <div style="font-size:.62rem;color:var(--dim);margin-top:.3rem;line-height:1.4">${data?.note||fb.note}</div>
     </div>`;
   }).join('');
 }
@@ -1371,6 +1347,11 @@ const FEEDS=[
   {url:'https://www.hse.gov.uk/press/press-rss.xml',src:'HSE',def:'safety'},
   {url:'https://echa.europa.eu/rss/news.xml',src:'ECHA',def:'regulatory'},
   {url:'https://www.gov.uk/government/organisations/environment-agency.atom',src:'Env Agency',def:'environment'},
+  {url:'https://www.gov.uk/search/news-and-communications.atom?organisations%5B%5D=department-for-energy-security-and-net-zero',src:'DESNZ',def:'energy'},
+  {url:'https://www.gov.uk/search/news-and-communications.atom?organisations%5B%5D=health-and-safety-executive',src:'HSE Gov',def:'safety'},
+  {url:'https://www.energyinst.org/rss/news',src:'Energy Institute',def:'energy'},
+  {url:'https://www.cefic.org/feed/',src:'CEFIC',def:'regulatory'},
+  {url:'https://www.chemicalwatch.com/news/rss',src:'Chemical Watch',def:'regulatory'},
 ];
 
 function parseRSS(xml,src,def){
@@ -1548,11 +1529,21 @@ async function loadReg(){
 
   // AI fallback
   try{
-    const r=await fetch('/api/query',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1500,system:'Return ONLY valid JSON array, no markdown.',messages:[{role:'user',content:'Generate 10 current UK and EU chemical industry regulatory updates. Cover REACH SVHC additions, HSE COMAH enforcement notices, ECHA consultations, CLP classification changes, IED permits, CBAM updates, Environment Agency guidance. Mix of urgency levels. JSON array: [{title, body, authority, date, urgency, link}] where authority=HSE|ECHA|Environment Agency|European Commission|MHCLG etc, urgency=high|medium|low, date=realistic recent date, link=realistic URL to hse.gov.uk or echa.europa.eu or gov.uk, body=2 sentences of detail'}]})});
+    const r=await fetch('/api/query',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1500,system:'Return ONLY valid JSON array, no markdown.',messages:[{role:'user',content:'Generate 10 current UK and EU chemical industry regulatory updates. Cover: REACH SVHC additions, HSE COMAH enforcement, ECHA consultations, CLP changes, IED permits, CBAM, EA guidance. Return ONLY a JSON array with objects: {title:string, body:string, authority:string, date:string, urgency:string, link:string}. authority values: HSE, ECHA, Environment Agency, European Commission. urgency values: high, medium, low. body: 2 sentences, no quotes or apostrophes inside strings. date format: Mon YYYY. link: realistic gov.uk or echa.europa.eu URL.'}]})});
     const d=await r.json();
     if(d.error){el.innerHTML='<div class="loading-ph" style="color:var(--red)">API error: '+JSON.stringify(d.error).slice(0,200)+'</div>';return;}
     let t=d.content?.map(c=>c.text||'').join('')||'[]';
-    items=JSON.parse(t.replace(/```json|```/g,'').trim());
+    // Strip control chars and smart quotes that break JSON
+t = t.replace(/```json|```/g,'').trim()
+     .replace(/[ -]/g,' ')
+     .replace(/[\u2018\u2019]/g,"'")
+     .replace(/[\u201C\u201D]/g,'"');
+try { items=JSON.parse(t); } catch(e2) {
+  // Try extracting just the array
+  const m=t.match(/\[.*\]/s);
+  if(m) items=JSON.parse(m[0]);
+  else throw e2;
+}
     renderReg(items);
   }catch(e){el.innerHTML='<div class="loading-ph" style="color:var(--red)">Error: '+e.message+'</div>';}
 }
@@ -2620,7 +2611,7 @@ function renderTECTable(rows) {
 let repdMap = null, repdLoaded = false, repdData = [], repdMarkers = null;
 let repdFilters = { tech:'all', status:'all', region:'all', chp:'0_off' };
 let repdSortCol = 'capacity_mw', repdSortAsc = false;
-let repdShowTable = false;
+let repdShowTable = true;
 
 // Technology colours
 const REPD_TECH_COLORS = {
