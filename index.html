@@ -328,29 +328,48 @@ nav::-webkit-scrollbar{display:none}
   <!-- ═══ NEWS ═══ -->
   <div class="page" id="pg-news" style="flex-direction:row">
     <div class="sb">
-      <div class="sb-hd"><span class="sb-ti">Live Sources</span></div>
+      <div class="sb-hd"><span class="sb-ti">News Sources</span></div>
       <div class="sb-bod">
-        <div class="src-row"><div class="src-icon" style="background:#fee2e2">🏛</div><div><div class="src-name">HSE UK<span class="badge-free">FREE</span></div><div class="src-desc">Press releases, enforcement notices, prohibition orders</div></div></div>
-        <div class="src-row"><div class="src-icon" style="background:#dbeafe">🇪🇺</div><div><div class="src-name">ECHA<span class="badge-free">FREE</span></div><div class="src-desc">REACH, CLP, biocides, SVHC additions</div></div></div>
-        <div class="src-row"><div class="src-icon" style="background:#dcfce7">🌊</div><div><div class="src-name">Environment Agency<span class="badge-free">FREE</span></div><div class="src-desc">Incidents, water quality, permits</div></div></div>
-        <div class="src-row"><div class="src-icon" style="background:#f3e8ff">📰</div><div><div class="src-name">ICIS / Argus<span class="badge-sub">PAID</span></div><div class="src-desc">Premium chemical market news — subscription required</div></div></div>
-        <div style="padding:.65rem .9rem">
-          <div class="ai-lbl"><div class="ai-dot"></div>AI News Brief</div>
-          <textarea class="ai-inp" id="nq" rows="3" placeholder="e.g. Summarise ECHA news this month. What's the latest HSE enforcement action?"></textarea>
+
+        <div style="padding:.4rem .9rem .15rem;font-size:.58rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--mid)">Safety &amp; Regulatory</div>
+        <div class="src-row"><div class="src-icon" style="background:#fee2e2">🏛</div><div><div class="src-name">HSE<span class="badge-free">FREE</span></div><div class="src-desc">Enforcement notices, prosecutions, COMAH</div></div></div>
+        <div class="src-row"><div class="src-icon" style="background:#fee2e2">📋</div><div><div class="src-name">HSE Press Office<span class="badge-free">FREE</span></div><div class="src-desc">Prohibition &amp; improvement notices</div></div></div>
+        <div class="src-row"><div class="src-icon" style="background:#dbeafe">🇪🇺</div><div><div class="src-name">ECHA<span class="badge-free">FREE</span></div><div class="src-desc">REACH, SVHC, CLP, biocides, authorisations</div></div></div>
+        <div class="src-row"><div class="src-icon" style="background:#f3e8ff">🧪</div><div><div class="src-name">Chemical Watch<span class="badge-free">FREE</span></div><div class="src-desc">Chemical regulation &amp; compliance news</div></div></div>
+        <div class="src-row"><div class="src-icon" style="background:#f3e8ff">🏭</div><div><div class="src-name">CEFIC<span class="badge-free">FREE</span></div><div class="src-desc">European chemical industry policy</div></div></div>
+
+        <div style="padding:.55rem .9rem .15rem;font-size:.58rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--mid)">UK Government</div>
+        <div class="src-row"><div class="src-icon" style="background:#dcfce7">🌊</div><div><div class="src-name">Environment Agency<span class="badge-free">FREE</span></div><div class="src-desc">Incidents, water quality, environmental permits</div></div></div>
+        <div class="src-row"><div class="src-icon" style="background:#fef9c3">⚡</div><div><div class="src-name">DESNZ<span class="badge-free">FREE</span></div><div class="src-desc">Energy security, hydrogen, CCS policy</div></div></div>
+        <div class="src-row"><div class="src-icon" style="background:#fef9c3">🛢️</div><div><div class="src-name">NSTA<span class="badge-free">FREE</span></div><div class="src-desc">North Sea licensing &amp; decommissioning</div></div></div>
+        <div class="src-row"><div class="src-icon" style="background:#dcfce7">🌿</div><div><div class="src-name">DEFRA<span class="badge-free">FREE</span></div><div class="src-desc">Environmental compliance, waste, water</div></div></div>
+
+        <div style="padding:.55rem .9rem .15rem;font-size:.58rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--mid)">Energy &amp; Markets</div>
+        <div class="src-row"><div class="src-icon" style="background:#fef9c3">📡</div><div><div class="src-name">Energy Live News<span class="badge-free">FREE</span></div><div class="src-desc">UK energy markets, policy, renewables</div></div></div>
+        <div class="src-row"><div class="src-icon" style="background:#fef9c3">⚡</div><div><div class="src-name">Energy Institute<span class="badge-free">FREE</span></div><div class="src-desc">Professional energy industry analysis</div></div></div>
+        <div class="src-row"><div class="src-icon" style="background:#dcfce7">🌍</div><div><div class="src-name">Carbon Brief<span class="badge-free">FREE</span></div><div class="src-desc">Climate, emissions &amp; energy policy</div></div></div>
+        <div class="src-row"><div class="src-icon" style="background:#fef9c3">📊</div><div><div class="src-name">S&amp;P Global Gas<span class="badge-free">FREE</span></div><div class="src-desc">Natural gas, LNG, TTF, NBP markets</div></div></div>
+        <div class="src-row"><div class="src-icon" style="background:#f3e8ff">📊</div><div><div class="src-name">S&amp;P Global Chemicals<span class="badge-free">FREE</span></div><div class="src-desc">Ethylene, methanol, ammonia, feedstocks</div></div></div>
+
+        <div style="padding:.55rem .9rem .15rem;font-size:.58rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--mid)">AI News Brief</div>
+        <div style="padding:0 .9rem .65rem">
+          <textarea class="ai-inp" id="nq" rows="3" placeholder="e.g. Summarise today's HSE enforcement actions. What's driving NBP gas prices this week?"></textarea>
           <button class="ai-btn" onclick="ask('nq','nr')">Get Brief →</button>
           <div class="ai-resp" id="nr"></div>
         </div>
+
       </div>
     </div>
     <div class="fp">
       <div class="page-ti">Industry News</div>
-      <div class="page-sub">Live from HSE · ECHA · Environment Agency · GOV.UK · Chemical Watch · CEFIC · Energy Institute</div>
+      <div class="page-sub">17 live sources · HSE · ECHA · DESNZ · GovWire · Energy Live News · S&amp;P Global · Chemical Watch · Carbon Brief · more</div>
       <div class="filter-row">
         <span class="fchip act" onclick="toggleNewsF('',this)">All</span>
-        <span class="fchip" onclick="toggleNewsF('safety',this)">Safety</span>
-        <span class="fchip" onclick="toggleNewsF('regulatory',this)">Regulatory</span>
-        <span class="fchip" onclick="toggleNewsF('environment',this)">Environment</span>
-        <span class="fchip" onclick="toggleNewsF('energy',this)">Energy</span>
+        <span class="fchip" onclick="toggleNewsF('safety',this)">⚠ Safety &amp; Enforcement</span>
+        <span class="fchip" onclick="toggleNewsF('regulatory',this)">📋 Regulatory</span>
+        <span class="fchip" onclick="toggleNewsF('environment',this)">🌿 Environment</span>
+        <span class="fchip" onclick="toggleNewsF('energy',this)">⚡ Energy &amp; Markets</span>
+        <span class="fchip" onclick="toggleNewsF('ops',this)">🏭 Chemical Industry</span>
       </div>
       <div id="news-list"><div class="loading-ph"><span class="sp"></span>Loading live RSS feeds…</div></div>
     </div>
