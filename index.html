@@ -1547,6 +1547,34 @@ try { items=JSON.parse(t); } catch(e2) {
     renderReg(items);
   }catch(e){el.innerHTML='<div class="loading-ph" style="color:var(--red)">Error: '+e.message+'</div>';}
 }
+function urgClass(t){
+  t=t.toLowerCase();
+  if(/prohibition|immediate|urgent|enforcement|incident|fire|explosion|major/.test(t))return'high';
+  if(/warning|review|consultation|update|change|new guidance|deadline/.test(t))return'medium';
+  return'low';
+}
+
+function renderReg(items){
+  const el=document.getElementById('reg-list');
+  if(!items||!items.length){el.innerHTML='<div class="loading-ph">No regulatory updates found.</div>';return;}
+  const uc={high:'var(--red)',medium:'var(--amber)',low:'var(--green)'};
+  const ub={high:'rgba(220,38,38,.08)',medium:'rgba(217,119,6,.06)',low:'rgba(34,197,94,.06)'};
+  el.innerHTML=items.map(r=>{
+    const col=uc[r.urgency||'low']||uc.low;
+    const bg=ub[r.urgency||'low']||ub.low;
+    return `<div style="background:${bg};border:1px solid var(--b1);border-left:3px solid ${col};border-radius:8px;padding:.85rem 1rem;margin-bottom:.55rem">
+      <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.3rem;flex-wrap:wrap">
+        <span style="font-size:.58rem;font-weight:800;text-transform:uppercase;padding:1px 6px;border-radius:3px;background:${col}22;color:${col}">${(r.urgency||'low').toUpperCase()}</span>
+        <span style="font-size:.65rem;color:var(--mid)">${r.authority||''}</span>
+        <span style="font-size:.62rem;color:var(--dim);margin-left:auto">${r.date||''}</span>
+      </div>
+      <div style="font-size:.82rem;font-weight:600;color:var(--text);margin-bottom:.25rem">${r.title||''}</div>
+      <div style="font-size:.72rem;color:var(--mid);line-height:1.55">${r.body||r.desc||''}</div>
+      ${r.link?`<a href="${r.link}" target="_blank" style="font-size:.65rem;color:var(--teal);margin-top:.35rem;display:inline-block">View →</a>`:''}
+    </div>`;
+  }).join('');
+}
+
 // ═══════════ AI ═══════════
 
 const SYS=`You are ChemPulse, expert analyst for UK and European chemical and energy industry. Deep expertise in: UK COMAH sites (Teesside, Grangemouth, Runcorn, Humber/Saltend), HSE enforcement, REACH/CLP/ECHA/Seveso, EU and UK energy markets (TTF, NBP, ETS, power), feedstocks (ethanol, ethylene, naphtha, ammonia), Humber energy transition (H2H Saltend, Humber Zero, Viking CCS, Orsted, offshore wind), Hull and East Yorkshire industrial planning, water constraints (EA abstraction, Rhine, UK rivers). Be concise and expert.`;
