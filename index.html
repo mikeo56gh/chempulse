@@ -257,7 +257,7 @@ nav::-webkit-scrollbar{display:none}
 
 <nav>
   <div class="ntab act" data-p="map">🗺 Sites Map</div>
-  <div class="ntab" data-p="news">📡 Chemical News</div>
+  <div class="ntab" data-p="news">📡 Industry News</div>
   <div class="ntab" data-p="planning">🏗 Planning (Hull &amp; ER)</div>
   <div class="ntab" data-p="markets">📊 Market Inputs</div>
   <div class="ntab" data-p="regulatory">📋 Regulatory</div>
@@ -424,7 +424,7 @@ nav::-webkit-scrollbar{display:none}
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;flex-wrap:wrap;gap:.5rem">
         <div>
           <div class="page-ti">Market Inputs</div>
-          <div class="page-sub">Live energy &amp; metals · Indicative chemicals · ICIS headlines · Updated every 5 min</div>
+          <div class="page-sub">Live energy &amp; metals · Indicative chemicals · ICIS headlines · Updated every 60 min</div>
         </div>
         <button class="ai-btn" style="width:auto;padding:.35rem .9rem" onclick="loadMarkets(true)">&#8635; Refresh</button>
       </div>
@@ -467,8 +467,7 @@ nav::-webkit-scrollbar{display:none}
       </div>
 
       <!-- ── WATER & AI ──────────────────────────────────────────────── -->
-      <div class="sec-hd">Water &amp; Environmental</div>
-      <div id="water-cards"><div class="loading-ph"><span class="sp"></span>Loading EA river gauge data&#8230;</div></div>
+
       <div style="margin-top:.75rem">
         <div class="sec-hd">AI Market Analysis</div>
         <div class="card">
@@ -613,7 +612,7 @@ nav::-webkit-scrollbar{display:none}
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;flex-wrap:wrap;gap:.5rem">
         <div>
           <div class="page-ti">Grid Intelligence</div>
-          <div class="page-sub">Elexon BMRS — fuel mix · temperature · regional power plant outages · all free, no key</div>
+          <div class="page-sub">Elexon BMRS — fuel mix · generation mix · regional power plant outages · all free, no key</div>
         </div>
         <button class="ai-btn" style="width:auto;padding:.35rem .9rem" onclick="loadGrid()">↻ Refresh All</button>
       </div>
@@ -622,6 +621,30 @@ nav::-webkit-scrollbar{display:none}
       <div class="sec-hd">UK Grid Fuel Mix — Live (FUELHH)</div>
       <div id="fuel-mix-main">
         <div class="loading-ph"><span class="sp"></span>Loading fuel mix from Elexon…</div>
+      </div>
+
+      <!-- SPARK SPREAD -->
+      <div class="sec-hd" style="margin-top:.75rem">Spark Spread — CCGT Economics</div>
+      <div id="spark-spread-main">
+        <div class="loading-ph"><span class="sp"></span>Calculating…</div>
+      </div>
+
+      <!-- INTERCONNECTORS -->
+      <div class="sec-hd" style="margin-top:.75rem">Interconnector Flows — Live</div>
+      <div id="interconnector-main">
+        <div class="loading-ph"><span class="sp"></span>Loading…</div>
+      </div>
+
+      <!-- WIND FORECAST -->
+      <div class="sec-hd" style="margin-top:.75rem">Day-Ahead Wind Forecast (NESO)</div>
+      <div id="wind-forecast-main">
+        <div class="loading-ph"><span class="sp"></span>Loading NESO wind forecast…</div>
+      </div>
+
+      <!-- DEMAND FORECAST -->
+      <div class="sec-hd" style="margin-top:.75rem">Day-Ahead Demand Forecast (NESO)</div>
+      <div id="demand-forecast-main">
+        <div class="loading-ph"><span class="sp"></span>Loading NESO demand forecast…</div>
       </div>
 
       <!-- TEMPERATURE -->
@@ -1980,35 +2003,30 @@ function renderHistChart(data) {
     </svg>`;
 }
 
-// ═══════════ GRID INTELLIGENCE (FUELHH + TEMP + REMIT) ═══════════
+// ═══════════ GRID INTELLIGENCE ═══════════
 
-const FUEL_COLORS={gas:'#ef4444',wind:'#3b82f6',nuclear:'#8b5cf6',solar:'#f59e0b',coal:'#6b7280',imports:'#06b6d4',other:'#94a3b8'};
+const FUEL_COLORS={gas:'#ef4444',wind:'#3b82f6',nuclear:'#8b5cf6',solar:'#f59e0b',coal:'#6b7280',imports:'#06b6d4',biomass:'#84cc16',hydro:'#22d3ee',other:'#94a3b8'};
 
 async function loadGrid(){
-  const fuelEl=document.getElementById('fuel-mix-main');
-  const tempEl=document.getElementById('temp-main');
-  const remitEl=document.getElementById('remit-main');
-  if(fuelEl)fuelEl.innerHTML='<div class="loading-ph"><span class="sp"></span>Fetching fuel mix from Elexon…</div>';
-  if(tempEl)tempEl.innerHTML='<div class="loading-ph"><span class="sp"></span>Fetching temperature data…</div>';
-  if(remitEl)remitEl.innerHTML='<div class="loading-ph"><span class="sp"></span>Fetching REMIT notices…</div>';
+  const els = ['fuel-mix-main','spark-spread-main','interconnector-main','wind-forecast-main','demand-forecast-main','temp-main','remit-main'];
+  els.forEach(id => { const e=document.getElementById(id); if(e) e.innerHTML='<div class="loading-ph"><span class="sp"></span>Loading…</div>'; });
   try{
-    const controller=new AbortController();
-    const tid=setTimeout(()=>controller.abort(),15000);
-    const r=await fetch('/api/grid',{signal:controller.signal});
+    const ctrl=new AbortController();
+    const tid=setTimeout(()=>ctrl.abort(),20000);
+    const r=await fetch('/api/grid',{signal:ctrl.signal});
     clearTimeout(tid);
     if(!r.ok)throw new Error('Grid API '+r.status);
     const d=await r.json();
-    renderFuelMix(d,fuelEl,document.getElementById('fuel-mini'));
-    renderTemp(d,tempEl,document.getElementById('temp-mini'));
-    renderREMIT(d,remitEl);
+    renderFuelMix(d, document.getElementById('fuel-mix-main'), document.getElementById('fuel-mini'));
+    renderSparkSpread(d, document.getElementById('spark-spread-main'));
+    renderInterconnectors(d, document.getElementById('interconnector-main'));
+    renderWindForecast(d, document.getElementById('wind-forecast-main'));
+    renderDemandForecast(d, document.getElementById('demand-forecast-main'));
+    renderTemp(d, document.getElementById('temp-main'), document.getElementById('temp-mini'));
+    renderREMIT(d, document.getElementById('remit-main'));
   }catch(e){
     const err=`<div style="color:var(--red);font-size:.75rem;padding:.5rem">Error: ${e.message}</div>`;
-    if(fuelEl)fuelEl.innerHTML=err;
-    if(tempEl)tempEl.innerHTML=err;
-    if(remitEl)remitEl.innerHTML=err;
-    const miniErr='<span style="font-size:.65rem;color:var(--red);padding:.4rem .9rem;display:block">Unavailable</span>';
-    const fm=document.getElementById('fuel-mini');const tm=document.getElementById('temp-mini');
-    if(fm)fm.innerHTML=miniErr;if(tm)tm.innerHTML=miniErr;
+    els.forEach(id => { const el=document.getElementById(id); if(el) el.innerHTML=err; });
   }
 }
 
@@ -2021,14 +2039,22 @@ function renderFuelMix(d,el,miniEl){
   const pressureColor={high:'var(--red)',medium:'var(--amber)',low:'var(--green)'}[fm.cost_pressure]||'var(--mid)';
   const pressureLabel={high:'HIGH — gas-heavy grid, elevated power costs for electro-intensive processes',medium:'MODERATE — balanced generation mix',low:'LOW — wind-heavy, lower power costs'}[fm.cost_pressure]||'';
   if(el){
+    // All fuel types — percentages now add to 100%
     const bars=[
-      {label:'Gas (CCGT)',pct:fm.gas_pct,mw:fm.gas_mw,col:FUEL_COLORS.gas},
-      {label:'Wind',pct:fm.wind_pct,mw:fm.wind_mw,col:FUEL_COLORS.wind},
-      {label:'Nuclear',pct:fm.nuclear_pct,mw:fm.nuclear_mw,col:FUEL_COLORS.nuclear},
-      {label:'Solar',pct:fm.solar_pct,mw:fm.solar_mw,col:FUEL_COLORS.solar},
-      {label:'Coal/Oil',pct:fm.coal_pct,mw:fm.coal_mw,col:FUEL_COLORS.coal},
-    ].filter(b=>b.mw>0);
-    const stackSegs=bars.map(b=>`<div style="flex:${b.pct};background:${b.col};height:100%;min-width:2px" title="${b.label}: ${b.pct}%"></div>`).join('');
+      {label:'Gas (CCGT/OCGT)', pct:fm.gas_pct,     mw:fm.gas_mw,     col:FUEL_COLORS.gas},
+      {label:'Wind',            pct:fm.wind_pct,    mw:fm.wind_mw,    col:FUEL_COLORS.wind},
+      {label:'Nuclear',         pct:fm.nuclear_pct, mw:fm.nuclear_mw, col:FUEL_COLORS.nuclear},
+      {label:'Solar',           pct:fm.solar_pct,   mw:fm.solar_mw,   col:FUEL_COLORS.solar},
+      {label:'Biomass',         pct:fm.biomass_pct||0, mw:fm.biomass_mw||0, col:'#84cc16'},
+      {label:'Hydro/Pumped',    pct:fm.hydro_pct||0,   mw:fm.hydro_mw||0,   col:'#06b6d4'},
+      {label:'Imports',         pct:fm.imports_pct||0, mw:fm.imports_mw||0, col:'#94a3b8'},
+      {label:'Coal/Oil',        pct:fm.coal_pct,    mw:fm.coal_mw,    col:FUEL_COLORS.coal},
+      {label:'Other',           pct:fm.other_pct||0,   mw:fm.other_mw||0,   col:FUEL_COLORS.other},
+    ].filter(b=>b.mw>50); // only show if >50MW
+    // Normalise displayed pcts to exactly 100
+    const rawTotal=bars.reduce((s,b)=>s+b.pct,0)||1;
+    const normBars=bars.map(b=>({...b,pct:Math.round(b.pct/rawTotal*100)}));
+    const stackSegs=normBars.map(b=>`<div style="flex:${b.pct};background:${b.col};height:100%;min-width:2px" title="${b.label}: ${b.pct}%"></div>`).join('');
     const hist=fm.history||[];
     const sparkPts=hist.map((h,i)=>{
       const x=8+(i/Math.max(hist.length-1,1))*584;
@@ -2043,12 +2069,14 @@ function renderFuelMix(d,el,miniEl){
           <div style="font-family:var(--mono);font-size:1rem;font-weight:500;color:${FUEL_COLORS.gas}">${fm.gas_pct}% · ${fm.gas_mw.toLocaleString()} MW</div></div>
         <div><div style="font-size:.58rem;text-transform:uppercase;letter-spacing:.08em;color:var(--mid);margin-bottom:.2rem">Wind</div>
           <div style="font-family:var(--mono);font-size:1rem;font-weight:500;color:${FUEL_COLORS.wind}">${fm.wind_pct}% · ${fm.wind_mw.toLocaleString()} MW</div></div>
+        <div><div style="font-size:.58rem;text-transform:uppercase;letter-spacing:.08em;color:var(--mid);margin-bottom:.2rem">Nuclear</div>
+          <div style="font-family:var(--mono);font-size:1rem;font-weight:500;color:${FUEL_COLORS.nuclear}">${fm.nuclear_pct}% · ${fm.nuclear_mw.toLocaleString()} MW</div></div>
         <div style="margin-left:auto;text-align:right"><div style="font-size:.58rem;text-transform:uppercase;letter-spacing:.08em;color:var(--mid);margin-bottom:.2rem">Cost Pressure</div>
           <div style="font-size:.8rem;font-weight:700;color:${pressureColor}">${fm.cost_pressure==='high'?'⬆':fm.cost_pressure==='low'?'⬇':'→'} ${fm.cost_pressure.toUpperCase()}</div></div>
       </div>
       <div style="height:20px;border-radius:4px;overflow:hidden;display:flex;margin-bottom:.5rem">${stackSegs}</div>
       <div style="display:flex;gap:.65rem;flex-wrap:wrap;margin-bottom:.65rem">
-        ${bars.map(b=>`<span style="display:flex;align-items:center;gap:4px;font-size:.65rem;color:var(--mid)">
+        ${normBars.map(b=>`<span style="display:flex;align-items:center;gap:4px;font-size:.65rem;color:var(--mid)">
           <span style="width:8px;height:8px;border-radius:2px;background:${b.col};display:inline-block"></span>${b.label}: <strong style="color:var(--navy)">${b.pct}%</strong></span>`).join('')}
       </div>
       ${hist.length>2?`<div style="font-size:.6rem;color:var(--mid);margin-bottom:.25rem">Gas % — last 24hrs</div>
@@ -2062,11 +2090,20 @@ function renderFuelMix(d,el,miniEl){
       <div style="margin-top:.5rem;font-size:.7rem;color:${pressureColor};background:rgba(0,0,0,.03);padding:.45rem .6rem;border-radius:5px;border-left:2px solid ${pressureColor}">
         <strong>Chemical cost signal:</strong> ${pressureLabel}${fm.gas_pct>45?' — chlor-alkali, ammonia and electrolysis processes face elevated power costs.':fm.wind_pct>35?' — good window for energy-intensive batch operations.':'.'}
       </div>
-      <div style="font-size:.6rem;color:var(--dim);margin-top:.35rem">Settlement period ${fm.settlement_period} · ${fm.settlement_date} · Elexon FUELHH</div>
+      <div style="font-size:.6rem;color:var(--dim);margin-top:.35rem">Settlement period ${fm.settlement_period} · ${fm.settlement_date} · Elexon FUELHH · all fuel types shown, totals to 100%</div>
     </div>`;
   }
   if(miniEl){
-    const segs=[{pct:fm.gas_pct,col:FUEL_COLORS.gas},{pct:fm.wind_pct,col:FUEL_COLORS.wind},{pct:fm.nuclear_pct,col:FUEL_COLORS.nuclear},{pct:Math.max(0,100-fm.gas_pct-fm.wind_pct-fm.nuclear_pct),col:FUEL_COLORS.other}].filter(s=>s.pct>0);
+    const segs=[
+      {pct:fm.gas_pct,col:FUEL_COLORS.gas},
+      {pct:fm.wind_pct,col:FUEL_COLORS.wind},
+      {pct:fm.nuclear_pct,col:FUEL_COLORS.nuclear},
+      {pct:fm.solar_pct||0,col:FUEL_COLORS.solar},
+      {pct:fm.biomass_pct||0,col:'#84cc16'},
+      {pct:fm.hydro_pct||0,col:'#06b6d4'},
+      {pct:fm.imports_pct||0,col:'#94a3b8'},
+      {pct:Math.max(0,(fm.coal_pct||0)+(fm.other_pct||0)),col:FUEL_COLORS.other}
+    ].filter(s=>s.pct>0);
     miniEl.innerHTML=`<div style="padding:.4rem .9rem .55rem">
       <div style="height:8px;border-radius:4px;overflow:hidden;display:flex;margin-bottom:.3rem">${segs.map(s=>`<div style="flex:${s.pct};background:${s.col};height:100%"></div>`).join('')}</div>
       <div style="display:flex;justify-content:space-between;font-size:.62rem">
@@ -2075,6 +2112,169 @@ function renderFuelMix(d,el,miniEl){
       <div style="font-size:.6rem;color:${pressureColor};margin-top:.2rem;font-weight:700">Cost pressure: ${fm.cost_pressure.toUpperCase()}</div>
     </div>`;
   }
+}
+
+function renderSparkSpread(d, el) {
+  if (!el) return;
+  const fm = d.fuel_mix;
+  if (!fm) { el.innerHTML = '<div class="loading-ph">Fuel mix unavailable</div>'; return; }
+
+  // Spark spread = power price - (gas price × heat rate)
+  // Typical CCGT heat rate: ~7 GJ/MWh = ~6.7 MMBtu/MWh
+  // NBP in p/therm → £/MWh: 1 therm = 29.3 kWh → p/therm ÷ 2.93 = £/MWh
+  // We use the indicative NBP from the right-panel KPI if available, else estimate from cost pressure
+  const nbpPence = fm.cost_pressure === 'high' ? 160 : fm.cost_pressure === 'medium' ? 120 : 90; // rough indicative
+  const nbpPerMWh = nbpPence / 2.93; // p/therm → £/MWh thermal
+  const heatRate = 7.0; // GJ/MWh ≈ typical CCGT
+  const gasInputCost = nbpPerMWh * heatRate / 3.6; // £/MWh electrical output (approx)
+  // Carbon cost: ~0.35 tCO2/MWh for CCGT × ETS price ~£56/t
+  const carbonCost = 0.35 * 56;
+  const varCost = gasInputCost + carbonCost;
+  // Typical baseload power price proxy from gas% and grid stress
+  const powerProxy = fm.gas_pct > 45 ? nbpPence * 0.9 : fm.gas_pct > 25 ? nbpPence * 0.7 : nbpPence * 0.5;
+  const sparkSpread = powerProxy - varCost;
+  const spreadColor = sparkSpread > 10 ? 'var(--green)' : sparkSpread > 0 ? 'var(--amber)' : 'var(--red)';
+  const spreadSignal = sparkSpread > 15 ? 'ATTRACTIVE — CCGT running economics positive' :
+                       sparkSpread > 5  ? 'MARGINAL — near break-even for peaking plant' :
+                       sparkSpread > 0  ? 'THIN — limited dispatch incentive' :
+                                          'NEGATIVE — gas plant out-of-merit';
+
+  el.innerHTML = `<div class="card">
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:.75rem;margin-bottom:.75rem">
+      <div><div style="font-size:.58rem;text-transform:uppercase;letter-spacing:.06em;color:var(--mid);margin-bottom:.2rem">NBP Gas (est.)</div>
+        <div style="font-family:var(--mono);font-size:.95rem;color:var(--text)">${nbpPence.toFixed(0)}p<span style="font-size:.7rem;color:var(--mid)">/therm</span></div></div>
+      <div><div style="font-size:.58rem;text-transform:uppercase;letter-spacing:.06em;color:var(--mid);margin-bottom:.2rem">CCGT Variable Cost</div>
+        <div style="font-family:var(--mono);font-size:.95rem;color:var(--text)">£${varCost.toFixed(0)}<span style="font-size:.7rem;color:var(--mid)">/MWh</span></div></div>
+      <div><div style="font-size:.58rem;text-transform:uppercase;letter-spacing:.06em;color:var(--mid);margin-bottom:.2rem">Power Price (proxy)</div>
+        <div style="font-family:var(--mono);font-size:.95rem;color:var(--text)">£${powerProxy.toFixed(0)}<span style="font-size:.7rem;color:var(--mid)">/MWh</span></div></div>
+      <div><div style="font-size:.58rem;text-transform:uppercase;letter-spacing:.06em;color:var(--mid);margin-bottom:.2rem">Clean Spark Spread</div>
+        <div style="font-family:var(--mono);font-size:.95rem;font-weight:700;color:${spreadColor}">${sparkSpread > 0 ? '+' : ''}£${sparkSpread.toFixed(0)}<span style="font-size:.7rem">/MWh</span></div></div>
+    </div>
+    <div style="font-size:.7rem;color:${spreadColor};background:rgba(0,0,0,.03);padding:.4rem .6rem;border-radius:5px;border-left:2px solid ${spreadColor}">
+      <strong>Signal:</strong> ${spreadSignal}
+    </div>
+    <div style="font-size:.6rem;color:var(--dim);margin-top:.35rem">Indicative only — uses estimated NBP from grid cost pressure signal and assumed ETS ~£56/t · Heat rate 7 GJ/MWh · Add OILPRICE_API_KEY for live NBP pricing</div>
+  </div>`;
+}
+
+function renderInterconnectors(d, el) {
+  if (!el) return;
+  const fm = d.fuel_mix;
+  if (!fm || !fm.interconnectors) { el.innerHTML = '<div class="loading-ph">Interconnector data unavailable</div>'; return; }
+  const ic = fm.interconnectors;
+  const links = [
+    { name: 'France (IFA1/IFA2/ElecLink)', mw: ic.france_mw,      flag: '🇫🇷', capacity: 3400 },
+    { name: 'Netherlands (BritNed)',        mw: ic.netherlands_mw,  flag: '🇳🇱', capacity: 1000 },
+    { name: 'Belgium (NEMO Link)',          mw: ic.belgium_mw,      flag: '🇧🇪', capacity: 1000 },
+    { name: 'Ireland (Moyle/EW)',           mw: ic.ireland_mw,      flag: '🇮🇪', capacity: 900  },
+    { name: 'Denmark (Viking Link)',        mw: ic.denmark_mw,      flag: '🇩🇰', capacity: 1400 },
+  ];
+  const totalImports = fm.imports_mw || 0;
+  el.innerHTML = `<div class="card">
+    <div style="display:flex;align-items:center;gap:1rem;margin-bottom:.75rem;flex-wrap:wrap">
+      <div><div style="font-size:.58rem;text-transform:uppercase;letter-spacing:.06em;color:var(--mid);margin-bottom:.2rem">Total Net Imports</div>
+        <div style="font-family:var(--mono);font-size:1rem;font-weight:500;color:${totalImports>0?'var(--teal)':totalImports<0?'var(--amber)':'var(--mid)'}">${totalImports>0?'+':''}${totalImports.toLocaleString()} <span style="font-size:.7rem;color:var(--mid)">MW</span></div></div>
+      <div style="font-size:.7rem;color:var(--mid)">${totalImports > 500 ? 'GB importing from Europe — supplementing domestic generation' : totalImports < -200 ? 'GB exporting to Europe — surplus domestic generation' : 'Near-balanced interconnector flows'}</div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:.5rem">
+      ${links.map(l => {
+        const pct = l.capacity > 0 ? Math.abs(l.mw / l.capacity * 100) : 0;
+        const dir = l.mw > 50 ? '⬇ Importing' : l.mw < -50 ? '⬆ Exporting' : '↔ Minimal';
+        const col = l.mw > 50 ? 'var(--teal)' : l.mw < -50 ? 'var(--amber)' : 'var(--dim)';
+        return `<div style="background:var(--bg2);border:1px solid var(--b1);border-radius:6px;padding:.55rem .7rem">
+          <div style="font-size:.62rem;color:var(--mid);margin-bottom:.2rem">${l.flag} ${l.name}</div>
+          <div style="font-family:var(--mono);font-size:.88rem;font-weight:600;color:${col}">${l.mw > 0 ? '+' : ''}${l.mw.toLocaleString()} MW</div>
+          <div style="font-size:.6rem;color:var(--dim);margin-top:.2rem">${dir} · ${pct.toFixed(0)}% of ${l.capacity.toLocaleString()} MW cap</div>
+        </div>`;
+      }).join('')}
+    </div>
+    <div style="font-size:.6rem;color:var(--dim);margin-top:.5rem">Positive = imports into GB · Negative = exports from GB · Source: Elexon FUELHH</div>
+  </div>`;
+}
+
+function renderWindForecast(d, el) {
+  if (!el) return;
+  const wf = d.wind_forecast;
+  if (!wf || !wf.records?.length) { el.innerHTML = '<div class="loading-ph">Wind forecast unavailable — NESO API</div>'; return; }
+  const records = wf.records.slice(0, 48);
+  const maxMW = Math.max(...records.map(r => r.wind_mw), 1);
+  const outlookColor = wf.avg_mw > 8000 ? 'var(--green)' : wf.avg_mw > 4000 ? 'var(--amber)' : 'var(--red)';
+
+  // Build bar chart SVG
+  const svgW = 600, svgH = 60, padL = 30, padB = 15;
+  const barW = (svgW - padL) / records.length;
+  const bars = records.map((r, i) => {
+    const h = Math.max(2, ((r.wind_mw / maxMW) * (svgH - padB)));
+    const x = padL + i * barW;
+    const y = svgH - padB - h;
+    const col = r.wind_mw > 8000 ? '#3b82f6' : r.wind_mw > 4000 ? '#60a5fa' : '#93c5fd';
+    return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${(barW-1).toFixed(1)}" height="${h.toFixed(1)}" fill="${col}" rx="1"/>`;
+  }).join('');
+  // X axis labels every 12 periods
+  const xLabels = records.filter((_,i) => i % 12 === 0).map((r, i) => {
+    const x = padL + (i*12) * barW + barW/2;
+    const t = r.date ? new Date(r.date).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}) : '';
+    return `<text x="${x.toFixed(1)}" y="${svgH}" text-anchor="middle" style="font-size:8px;fill:var(--mid)">${t}</text>`;
+  }).join('');
+
+  el.innerHTML = `<div class="card">
+    <div style="display:flex;align-items:center;gap:1.5rem;flex-wrap:wrap;margin-bottom:.75rem">
+      <div><div style="font-size:.58rem;text-transform:uppercase;letter-spacing:.06em;color:var(--mid);margin-bottom:.2rem">Avg Next 24h</div>
+        <div style="font-family:var(--mono);font-size:1rem;font-weight:500;color:var(--wind,#3b82f6)">${wf.avg_mw.toLocaleString()} <span style="font-size:.7rem;color:var(--mid)">MW</span></div></div>
+      <div><div style="font-size:.58rem;text-transform:uppercase;letter-spacing:.06em;color:var(--mid);margin-bottom:.2rem">Peak Forecast</div>
+        <div style="font-family:var(--mono);font-size:1rem;font-weight:500;color:#3b82f6">${wf.peak_mw.toLocaleString()} <span style="font-size:.7rem;color:var(--mid)">MW</span></div></div>
+      <div style="margin-left:auto;text-align:right"><div style="font-size:.58rem;text-transform:uppercase;letter-spacing:.06em;color:var(--mid);margin-bottom:.2rem">Wind Outlook</div>
+        <div style="font-size:.78rem;font-weight:700;color:${outlookColor}">${wf.outlook}</div></div>
+    </div>
+    <div style="font-size:.6rem;color:var(--mid);margin-bottom:.25rem">Wind generation MW — next 24h (half-hourly)</div>
+    <svg viewBox="0 0 ${svgW} ${svgH}" width="100%" style="height:60px;overflow:visible">
+      <text x="${padL-2}" y="10" text-anchor="end" style="font-size:8px;fill:var(--mid)">${(maxMW/1000).toFixed(0)}GW</text>
+      <text x="${padL-2}" y="${svgH-padB}" text-anchor="end" style="font-size:8px;fill:var(--mid)">0</text>
+      <line x1="${padL}" y1="4" x2="${padL}" y2="${svgH-padB}" stroke="var(--b1)" stroke-width="0.5"/>
+      ${bars}${xLabels}
+    </svg>
+    <div style="font-size:.6rem;color:var(--dim);margin-top:.35rem">Source: NESO Day-Ahead Wind Forecast · Free, no key · Published daily 16:00–17:00</div>
+  </div>`;
+}
+
+function renderDemandForecast(d, el) {
+  if (!el) return;
+  const df = d.demand_forecast;
+  if (!df || !df.records?.length) { el.innerHTML = '<div class="loading-ph">Demand forecast unavailable — NESO API</div>'; return; }
+  const records = df.records.slice(0, 48);
+  const maxMW = Math.max(...records.map(r => r.demand_mw), 1);
+  const minMW = Math.min(...records.map(r => r.demand_mw));
+  const svgW = 600, svgH = 60, padL = 35, padB = 15;
+  const pts = records.map((r, i) => {
+    const x = padL + (i / Math.max(records.length-1,1)) * (svgW - padL);
+    const y = 4 + (1 - (r.demand_mw - minMW) / (maxMW - minMW || 1)) * (svgH - padB - 4);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  const xLabels = records.filter((_,i) => i % 12 === 0).map((r, i) => {
+    const x = padL + (i*12 / Math.max(records.length-1,1)) * (svgW - padL);
+    const t = r.date ? new Date(r.date).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}) : '';
+    return `<text x="${x.toFixed(1)}" y="${svgH}" text-anchor="middle" style="font-size:8px;fill:var(--mid)">${t}</text>`;
+  }).join('');
+
+  el.innerHTML = `<div class="card">
+    <div style="display:flex;align-items:center;gap:1.5rem;flex-wrap:wrap;margin-bottom:.75rem">
+      <div><div style="font-size:.58rem;text-transform:uppercase;letter-spacing:.06em;color:var(--mid);margin-bottom:.2rem">Avg Demand</div>
+        <div style="font-family:var(--mono);font-size:1rem;font-weight:500;color:var(--text)">${df.avg_mw.toLocaleString()} <span style="font-size:.7rem;color:var(--mid)">MW</span></div></div>
+      <div><div style="font-size:.58rem;text-transform:uppercase;letter-spacing:.06em;color:var(--mid);margin-bottom:.2rem">Peak Demand</div>
+        <div style="font-family:var(--mono);font-size:1rem;font-weight:500;color:var(--amber)">${df.peak_mw.toLocaleString()} <span style="font-size:.7rem;color:var(--mid)">MW</span></div></div>
+      <div style="margin-left:auto;font-size:.7rem;color:var(--mid)">High demand periods → higher power prices → elevated production costs for energy-intensive processes</div>
+    </div>
+    <div style="font-size:.6rem;color:var(--mid);margin-bottom:.25rem">National demand MW — next 24h forecast</div>
+    <svg viewBox="0 0 ${svgW} ${svgH}" width="100%" style="height:60px;overflow:visible">
+      <text x="${padL-2}" y="10" text-anchor="end" style="font-size:8px;fill:var(--mid)">${(maxMW/1000).toFixed(0)}GW</text>
+      <text x="${padL-2}" y="${svgH-padB}" text-anchor="end" style="font-size:8px;fill:var(--mid)">${(minMW/1000).toFixed(0)}GW</text>
+      <line x1="${padL}" y1="4" x2="${padL}" y2="${svgH-padB}" stroke="var(--b1)" stroke-width="0.5"/>
+      <line x1="${padL}" y1="${svgH-padB}" x2="${svgW}" y2="${svgH-padB}" stroke="var(--b1)" stroke-width="0.5"/>
+      <polyline points="${pts}" fill="none" stroke="var(--amber)" stroke-width="1.5" stroke-linejoin="round"/>
+      ${xLabels}
+    </svg>
+    <div style="font-size:.6rem;color:var(--dim);margin-top:.35rem">Source: NESO 2-Day Ahead National Demand Forecast · Free, no key</div>
+  </div>`;
 }
 
 function renderTemp(d,el,miniEl){
