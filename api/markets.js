@@ -163,7 +163,7 @@ async function fetchIcisHeadlines() {
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=60');
+  res.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate=300');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   const [energy, metals, headlines] = await Promise.all([fetchOilPrices(), fetchMetals(), fetchIcisHeadlines()]);
