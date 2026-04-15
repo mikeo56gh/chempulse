@@ -1,0 +1,16 @@
+{
+  "functions": {
+    "api/grid.js":     { "maxDuration": 30 },
+    "api/ccgt.js":     { "maxDuration": 30 },
+    "api/planning.js": { "maxDuration": 20 },
+    "api/news.js":     { "maxDuration": 20 },
+    "api/rivers.js":   { "maxDuration": 20 },
+    "api/energy.js":   { "maxDuration": 20 },
+    "api/sites.js":    { "maxDuration": 10 },
+    "api/query.js":    { "maxDuration": 30 },
+    "api/repd.js":     { "maxDuration": 30 },
+    "api/tec.js":      { "maxDuration": 30 },
+    "api/nsip.js":     { "maxDuration": 20 },
+    "api/markets.js":  { "maxDuration": 25 }
+  }
+}
