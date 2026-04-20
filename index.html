@@ -2227,50 +2227,65 @@ function renderWindForecast(d, el) {
 function renderREMIT(d,el){
   if(!el)return;
   if(!d.remit){
-    const debug=d.remit_debug?`<br><span style="font-family:var(--font-mono);font-size:.65rem;color:var(--dim)">Debug: ${JSON.stringify(d.remit_debug).slice(0,200)}</span>`:'';
     el.innerHTML=`<div style="font-size:.72rem;color:var(--amber);padding:.5rem;background:rgba(245,158,11,.06);border-radius:6px;border-left:2px solid var(--amber)">
-      REMIT data unavailable: ${d.remit_error||'unknown error'}${debug}<br>
+      REMIT data unavailable: ${d.remit_error||'unknown error'}<br>
       <a href="https://bmrs.elexon.co.uk/remit" target="_blank" style="color:var(--teal)">View REMIT on BMRS directly →</a>
     </div>`;
     return;
   }
   const rm=d.remit;
-  if(rm.total_found===0){
-    el.innerHTML=`<div class="card"><div style="font-size:.75rem;color:var(--green);padding:.25rem 0">✓ No active or upcoming outage notices for monitored plants in the next 14 days.</div>
+  if(!rm.notices?.length){
+    el.innerHTML=`<div class="card"><div style="font-size:.75rem;color:var(--green);padding:.25rem 0">✓ No REMIT notices found for monitored plants.</div>
       <div style="font-size:.65rem;color:var(--dim);margin-top:.3rem">Monitoring: Saltend, Killingholme, Keadby, South Humber Bank, Teesside · <a href="https://bmrs.elexon.co.uk/remit" target="_blank" style="color:var(--teal)">View all REMIT →</a></div></div>`;
     return;
   }
-  const active=rm.notices.filter(n=>n.active);
-  const upcoming=rm.notices.filter(n=>!n.active);
-  const renderN=n=>{
-    const col=n.active?'var(--red)':'var(--amber)';
-    const badge=n.active?`<span style="font-size:.58rem;font-weight:800;padding:.1rem .4rem;border-radius:3px;background:rgba(220,38,38,.1);color:var(--red)">ACTIVE</span>`:
-      `<span style="font-size:.58rem;font-weight:800;padding:.1rem .4rem;border-radius:3px;background:rgba(245,158,11,.1);color:var(--amber)">UPCOMING</span>`;
-    const mw=n.unavailable_mw?`<span style="font-family:var(--mono);font-size:.7rem;color:var(--navy);margin-left:auto">${n.unavailable_mw} MW</span>`:'';
-    const start=n.start?new Date(n.start).toLocaleDateString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'';
-    const end=n.end?new Date(n.end).toLocaleDateString('en-GB',{day:'numeric',month:'short'}):'TBC';
-    return`<div style="padding:.6rem 0;border-bottom:1px solid var(--b1)">
-      <div style="display:flex;align-items:center;gap:.4rem;flex-wrap:wrap;margin-bottom:.2rem">${badge}
-        <span style="font-size:.68rem;font-weight:600;color:var(--navy)">${n.plant_name}</span>
-        <span style="font-size:.62rem;color:var(--teal)">${n.chemical_site}</span>${mw}</div>
-      <div style="display:flex;gap:.4rem;font-size:.65rem;color:var(--mid)">
-        <span style="font-family:var(--mono);font-size:.6rem">${n.bmu}</span>
-        ${n.type?`<span>· ${n.type}</span>`:''}
-        ${n.reason?`<span>· ${n.reason.slice(0,80)}</span>`:''}
+
+  const fmtDt = s => {
+    if(!s)return '';
+    const d=new Date(s);
+    return d.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'2-digit',hour:'2-digit',minute:'2-digit'});
+  };
+
+  const badge = n =>
+    n.active   ? `<span style="font-size:.58rem;font-weight:800;padding:.1rem .42rem;border-radius:3px;background:rgba(220,38,38,.15);color:var(--red)">ACTIVE</span>` :
+    n.upcoming ? `<span style="font-size:.58rem;font-weight:800;padding:.1rem .42rem;border-radius:3px;background:rgba(245,158,11,.15);color:var(--amber)">UPCOMING</span>` :
+                 `<span style="font-size:.58rem;font-weight:800;padding:.1rem .42rem;border-radius:3px;background:rgba(100,116,139,.15);color:var(--dim)">ENDED</span>`;
+
+  const active   = rm.notices.filter(n=>n.active);
+  const upcoming = rm.notices.filter(n=>n.upcoming);
+  const ended    = rm.notices.filter(n=>n.ended);
+
+  const renderN = n => {
+    const borderCol = n.active?'var(--red)':n.upcoming?'var(--amber)':'var(--b1)';
+    return `<div style="display:grid;grid-template-columns:90px 90px 1fr auto;gap:.4rem .75rem;align-items:start;padding:.5rem 0;border-bottom:1px solid var(--b1);font-size:.68rem">
+      <div>${badge(n)}</div>
+      <div style="font-family:var(--mono);font-size:.7rem;font-weight:600;color:var(--navy)">${n.bmu}</div>
+      <div>
+        <span style="color:var(--mid)">${n.type||''}</span>
+        ${n.reason?`<span style="color:var(--text)"> · ${n.reason.slice(0,100)}</span>`:''}
+        <div style="font-size:.6rem;color:var(--dim);margin-top:.15rem">${fmtDt(n.start)} → ${n.end?fmtDt(n.end):'TBC'}</div>
+        <div style="font-size:.6rem;color:var(--teal)">${n.chemical_site}</div>
       </div>
-      ${start?`<div style="font-size:.62rem;color:var(--dim);margin-top:.12rem">${start} → ${end}</div>`:''}
+      <div style="text-align:right;font-family:var(--mono);font-size:.7rem;white-space:nowrap">
+        ${n.unavailable_mw!=null?`<span style="color:var(--red)">${n.unavailable_mw} MW</span>`:''}
+        ${n.normal_mw!=null?`<br><span style="color:var(--dim);font-size:.6rem">normal: ${n.normal_mw} MW</span>`:''}
+      </div>
     </div>`;
   };
-  el.innerHTML=`
-    ${active.length>0?`<div class="card" style="border-left:3px solid var(--red);margin-bottom:.6rem">
-      <div class="card-ti" style="color:var(--red)">⚠ Active Outages (${active.length})</div>
-      ${active.map(renderN).join('')}</div>`:''}
-    ${upcoming.length>0?`<div class="card" style="border-left:3px solid var(--amber);margin-bottom:.6rem">
-      <div class="card-ti" style="color:var(--amber)">📅 Upcoming Planned Outages (${upcoming.length})</div>
-      ${upcoming.map(renderN).join('')}</div>`:''}
-    <div style="font-size:.62rem;color:var(--dim);padding:.3rem 0">
-      Monitoring Humber &amp; Teesside area CCGTs · <a href="https://bmrs.elexon.co.uk/remit" target="_blank" style="color:var(--teal)">Full REMIT register →</a>
-    </div>`;
+
+  const section = (items, label, col) => items.length ? `
+    <div style="font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:${col};padding:.4rem 0 .2rem">${label} (${items.length})</div>
+    ${items.map(renderN).join('')}` : '';
+
+  el.innerHTML=`<div class="card" style="overflow-x:auto">
+    ${section(active,  '⚠ Active Outages',   'var(--red)')}
+    ${section(upcoming,'📅 Upcoming Planned', 'var(--amber)')}
+    ${section(ended,   'Ended (last 30 days)','var(--dim)')}
+    <div style="font-size:.62rem;color:var(--dim);padding:.4rem 0 0">
+      ${rm.total_found} notices · Saltend, Killingholme, Keadby, South Humber, Teesside ·
+      <a href="https://bmrs.elexon.co.uk/remit" target="_blank" style="color:var(--teal)">Full REMIT register →</a>
+    </div>
+  </div>`;
 }
 
 // ═══════════ INIT ═══════════
