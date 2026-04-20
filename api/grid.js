@@ -163,81 +163,73 @@ async function fetchWindSolarForecast(today, tomorrow) {
 }
 
 // ── REMIT ─────────────────────────────────────────────────────────────────────
+// Uses datasets/REMIT with from/to/bmUnit — same pattern as ccgt.js which works
 
 async function fetchREMIT(now) {
-  const from30d = new Date(now - 30 * 86400000).toISOString();
-  const to90d   = new Date(now + 90 * 86400000).toISOString();
+  const from30d = new Date(now - 30 * 86400000).toISOString().split("T")[0];
+  const to30d   = new Date(now + 30 * 86400000).toISOString().split("T")[0];
 
-  const ASSETS = [
-    { id: 'T_SCCL-1',  name: 'Saltend Unit 1',   site: 'Saltend Chemicals Park' },
-    { id: 'T_SCCL-2',  name: 'Saltend Unit 2',   site: 'Saltend Chemicals Park' },
-    { id: 'T_SCCL-3',  name: 'Saltend Unit 3',   site: 'Saltend Chemicals Park' },
-    { id: 'T_KILNO-1', name: 'Killingholme A',    site: 'South Humber Bank' },
-    { id: 'T_KILNS-1', name: 'Killingholme B',    site: 'South Humber Bank' },
-    { id: 'T_KEAD-1',  name: 'Keadby 1',         site: 'Scunthorpe / Humber' },
-    { id: 'T_KEAD-2',  name: 'Keadby 2',         site: 'Scunthorpe / Humber' },
-    { id: 'T_SOHU-1',  name: 'South Humber Bank', site: 'South Humber Bank' },
-    { id: 'T_TEAB-1',  name: 'Teesside Power',    site: 'Teesside' },
+  // Use prefix queries (T_SCCL not T_SCCL-1) — matches all units, same as ccgt.js
+  const PREFIXES = [
+    { bmu: "T_SCCL",  name: "Saltend (Triton Power)", site: "Saltend Chemicals Park" },
+    { bmu: "T_KILNO", name: "Killingholme A",          site: "South Humber Bank" },
+    { bmu: "T_KILNS", name: "Killingholme B",          site: "South Humber Bank" },
+    { bmu: "T_KEAD",  name: "Keadby",                  site: "Scunthorpe / Humber" },
+    { bmu: "T_SOHU",  name: "South Humber Bank",        site: "South Humber Bank" },
+    { bmu: "T_TEAB",  name: "Teesside Power",           site: "Teesside" },
   ];
-  const assetMeta = Object.fromEntries(ASSETS.map(a => [a.id, a]));
 
-  // Step 1: list/by-publish for each asset in parallel
-  const msgIds = new Set();
-  await Promise.allSettled(ASSETS.map(async asset => {
+  // Individual asset lookup for display names
+  const ASSETS = [
+    { bmu: "T_SCCL-1",  name: "Saltend Unit 1",    site: "Saltend Chemicals Park" },
+    { bmu: "T_SCCL-2",  name: "Saltend Unit 2",    site: "Saltend Chemicals Park" },
+    { bmu: "T_SCCL-3",  name: "Saltend Unit 3",    site: "Saltend Chemicals Park" },
+    { bmu: "T_KILNO-1", name: "Killingholme A",     site: "South Humber Bank" },
+    { bmu: "T_KILNS-1", name: "Killingholme B",     site: "South Humber Bank" },
+    { bmu: "T_KEAD-1",  name: "Keadby 1",          site: "Scunthorpe / Humber" },
+    { bmu: "T_KEAD-2",  name: "Keadby 2",          site: "Scunthorpe / Humber" },
+    { bmu: "T_SOHU-1",  name: "South Humber Bank",  site: "South Humber Bank" },
+    { bmu: "T_TEAB-1",  name: "Teesside Power",     site: "Teesside" },
+  ];
+  const metaMap = Object.fromEntries(ASSETS.map(a => [a.bmu, a]));
+  // Prefix fallback
+  PREFIXES.forEach(p => { metaMap[p.bmu] = p; });
+
+  const allItems = [];
+  await Promise.allSettled(PREFIXES.map(async pfx => {
     try {
-      const url = `${BASE}/remit/list/by-publish?from=${encodeURIComponent(from30d)}&to=${encodeURIComponent(to90d)}&assetId=${asset.id}&latestRevisionOnly=true&format=json`;
+      const url = `${BASE}/datasets/REMIT?from=${from30d}&to=${to30d}&bmUnit=${pfx.bmu}`;
       const r = await ft(url, 8000);
       if (!r.ok) return;
       const d = await r.json();
-      (d.data || []).forEach(m => { if (m.id) msgIds.add(m.id); });
+      (d.data || d.items || []).forEach(i => allItems.push({ ...i, _meta: pfx }));
     } catch(e) {}
   }));
 
-  if (!msgIds.size) return { total_found: 0, notices: [], monitored_count: ASSETS.length };
-
-  // Step 2: bulk fetch message details — /remit?messageId=1&messageId=2...
-  // Batch into groups of 20 to avoid URL length limits
-  const idArr = [...msgIds];
-  const allDetails = [];
-  const BATCH = 20;
-  for (let i = 0; i < idArr.length; i += BATCH) {
-    const batch = idArr.slice(i, i + BATCH);
-    const qs = batch.map(id => `messageId=${id}`).join('&');
-    try {
-      const r = await ft(`${BASE}/remit?${qs}&format=json`, 10000);
-      if (!r.ok) continue;
-      const d = await r.json();
-      allDetails.push(...(d.data || []));
-    } catch(e) {}
-  }
-
-  // Normalise using exact field names from the API schema
   const nowMs = now.getTime();
-  const notices = allDetails.map(m => {
-    const bmu    = m.assetId || m.affectedUnit || '';
-    const meta   = assetMeta[bmu] || { name: bmu, site: 'Humber / Teesside' };
-    const start  = m.eventStartTime || m.eventStart || '';
-    const end    = m.eventEndTime   || m.eventEnd   || '';
-    const sMs    = start ? new Date(start).getTime() : 0;
-    const eMs    = end   ? new Date(end).getTime()   : 0;
+  const notices = allItems.map(i => {
+    const meta  = i._meta;
+    const start = i.eventStartTime || i.eventStart || i.effectiveFrom || "";
+    const end   = i.eventEndTime   || i.eventEnd   || i.effectiveTo   || "";
+    const sMs   = start ? new Date(start).getTime() : 0;
+    const eMs   = end   ? new Date(end).getTime()   : 0;
     return {
-      bmu,
+      bmu:            i.bmUnit || i.assetId || meta.bmu,
       plant_name:     meta.name,
       chemical_site:  meta.site,
-      type:           m.unavailabilityType || m.messageType || '',
-      reason:         m.cause || m.messageHeading || m.relatedInformation || '',
-      unavailable_mw: m.unavailableCapacity ?? null,
-      normal_mw:      m.normalCapacity ?? null,
-      available_mw:   m.availableCapacity ?? null,
-      event_status:   m.eventStatus || '',
+      type:           i.unavailabilityType || i.outageType || i.messageType || "",
+      reason:         i.cause || i.reasonForUnavailability || i.messageHeading || "",
+      unavailable_mw: i.unavailableCapacity ?? i.unavailableCapacityMW ?? null,
+      normal_mw:      i.normalCapacity ?? null,
+      available_mw:   i.availableCapacity ?? null,
+      event_status:   i.eventStatus || "",
       start, end,
       active:   sMs > 0 && eMs > 0 && sMs <= nowMs && eMs >= nowMs,
       upcoming: sMs > nowMs,
       ended:    eMs > 0 && eMs < nowMs,
     };
-  }).filter(m => m.bmu);
+  }).filter(n => n.bmu);
 
-  // Sort: active → upcoming (by start) → ended (by end desc)
   notices.sort((a, b) => {
     if (a.active   && !b.active)   return -1;
     if (!a.active  && b.active)    return 1;
@@ -246,14 +238,15 @@ async function fetchREMIT(now) {
     return new Date(b.start) - new Date(a.start);
   });
 
-  return { 
-    total_found: notices.length, 
-    notices: notices.slice(0, 40), 
-    monitored_count: ASSETS.length,
+  return {
+    total_found:      notices.length,
+    notices:          notices.slice(0, 40),
+    monitored_count:  ASSETS.length,
     debug: {
-      msg_ids_found: idArr.length,
-      details_fetched: allDetails.length,
-      assets_queried: ASSETS.map(a => a.id),
-    }
+      total_raw:      allItems.length,
+      from:           from30d,
+      to:             to90d,
+      assets_queried: ASSETS.map(a => a.bmu),
+    },
   };
 }
