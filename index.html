@@ -1760,16 +1760,42 @@ function renderCCGTRemit(d,el){
     el.innerHTML=`<div class="card"><div class="card-ti">REMIT Outage Notices</div><div style="font-size:.72rem;color:var(--mid);margin-top:.3rem">No REMIT notices found. <a href="https://bmrs.elexon.co.uk/remit" target="_blank" style="color:var(--teal)">Check BMRS REMIT →</a></div></div>`;
     return;
   }
-  el.innerHTML=`<div class="card"><div class="card-ti" style="color:var(--amber)">⚠ REMIT Outage Notices (${d.remit_outages.length})</div>
-    ${d.remit_outages.map(r=>`<div style="padding:.5rem 0;border-bottom:1px solid var(--b1);font-size:.75rem">
-      <div style="display:flex;gap:.5rem;align-items:center;margin-bottom:.2rem">
-        <span style="font-family:var(--mono);font-size:.62rem;color:var(--mid)">${r.bmu||''}</span>
-        <span style="font-size:.62rem;font-weight:700;color:var(--amber)">${r.type||'OUTAGE'}</span>
-        ${r.unavailableMW?`<span style="font-family:var(--mono);font-size:.65rem;color:var(--navy);margin-left:auto">${r.unavailableMW} MW</span>`:''}
-      </div>
-      ${r.reason?`<div style="color:var(--mid)">${r.reason}</div>`:''}
-      ${r.startTime?`<div style="font-size:.65rem;color:var(--dim);margin-top:.15rem">${new Date(r.startTime).toLocaleDateString('en-GB')} → ${r.endTime?new Date(r.endTime).toLocaleDateString('en-GB'):'TBC'}</div>`:''}
-    </div>`).join('')}
+
+  const fmtDt = s => s ? new Date(s).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'2-digit',hour:'2-digit',minute:'2-digit'}) : '';
+
+  const active   = d.remit_outages.filter(r => r.active);
+  const upcoming = d.remit_outages.filter(r => r.upcoming);
+  const ended    = d.remit_outages.filter(r => r.ended);
+
+  const badge = r =>
+    r.active   ? `<span style="font-size:.56rem;font-weight:800;padding:.1rem .4rem;border-radius:3px;background:rgba(220,38,38,.15);color:var(--red)">ACTIVE</span>` :
+    r.upcoming ? `<span style="font-size:.56rem;font-weight:800;padding:.1rem .4rem;border-radius:3px;background:rgba(245,158,11,.15);color:var(--amber)">UPCOMING</span>` :
+                 `<span style="font-size:.56rem;font-weight:800;padding:.1rem .4rem;border-radius:3px;background:rgba(100,116,139,.15);color:var(--dim)">ENDED</span>`;
+
+  const renderRow = r => `<div style="display:grid;grid-template-columns:80px 75px 85px 1fr auto;gap:.4rem .65rem;align-items:start;padding:.45rem 0;border-bottom:1px solid var(--b1);font-size:.68rem">
+    <div>${badge(r)}</div>
+    <div style="font-family:var(--mono);font-size:.68rem;font-weight:600;color:var(--navy)">${r.bmu||''}</div>
+    <div style="font-size:.65rem;color:var(--mid)">${r.type||''}</div>
+    <div>
+      ${r.reason?`<div style="color:var(--text)">${r.reason.slice(0,120)}</div>`:''}
+      <div style="font-size:.6rem;color:var(--dim);margin-top:.15rem">${fmtDt(r.startTime)} → ${r.endTime?fmtDt(r.endTime):'TBC'}</div>
+    </div>
+    <div style="text-align:right;font-family:var(--mono);font-size:.68rem;white-space:nowrap">
+      ${r.unavailableMW!=null?`<span style="color:var(--red);font-weight:600">${r.unavailableMW} MW</span>`:''}
+      ${r.normalMW!=null?`<br><span style="color:var(--dim);font-size:.58rem">normal: ${r.normalMW}</span>`:''}
+    </div>
+  </div>`;
+
+  const section = (items, label, color) => items.length ? `
+    <div style="font-size:.58rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:${color};padding:.5rem 0 .2rem">${label} (${items.length})</div>
+    ${items.map(renderRow).join('')}` : '';
+
+  el.innerHTML = `<div class="card" style="overflow-x:auto">
+    <div class="card-ti" style="color:var(--amber);margin-bottom:.3rem">⚠ REMIT Outage Notices — Saltend (${d.remit_outages.length})</div>
+    ${section(active,   'Active',                 'var(--red)')}
+    ${section(upcoming, 'Upcoming Planned',       'var(--amber)')}
+    ${section(ended,    'Ended (last 3 months)',  'var(--dim)')}
+    <div style="font-size:.6rem;color:var(--dim);padding:.4rem 0 0"><a href="https://bmrs.elexon.co.uk/remit" target="_blank" style="color:var(--teal)">Full REMIT register →</a></div>
   </div>`;
 }
 
