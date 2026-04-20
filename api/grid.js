@@ -165,12 +165,11 @@ async function fetchWindSolarForecast(today, tomorrow) {
 // ── REMIT ─────────────────────────────────────────────────────────────────────
 
 async function fetchREMIT(now) {
-  // Use the same working pattern as ccgt.js:
-  // /datasets/REMIT?from=...&to=...&bmUnit=... (simple date range + BMU prefix)
-  const from7d  = new Date(now - 7  * 86400000).toISOString().split('T')[0];
-  const to14d   = new Date(now + 14 * 86400000).toISOString().split('T')[0];
+  // Exact same working pattern as ccgt.js:
+  // from = date-only string, to = date-only string, bmUnit = prefix (no unit number)
+  const from30d = new Date(now - 30  * 86400000).toISOString().split('T')[0];
+  const to90d   = new Date(now + 90  * 86400000).toISOString().split('T')[0];
 
-  // Fetch per cluster in parallel — one request per BMU prefix
   const bmuPrefixes = [
     { prefix: 'T_SCCL',  name: 'Saltend (Triton Power)',  site: 'Saltend Chemicals Park' },
     { prefix: 'T_KILNO', name: 'Killingholme A',          site: 'South Humber Bank' },
@@ -183,7 +182,7 @@ async function fetchREMIT(now) {
   const allItems = [];
   await Promise.allSettled(bmuPrefixes.map(async ({ prefix, name, site }) => {
     try {
-      const url = `${BASE}/datasets/REMIT?from=${from7d}&to=${to14d}&bmUnit=${prefix}`;
+      const url = `${BASE}/datasets/REMIT?from=${from30d}&to=${to90d}&bmUnit=${prefix}`;
       const r = await ft(url, 8000);
       if (!r.ok) return;
       const d = await r.json();
@@ -196,6 +195,7 @@ async function fetchREMIT(now) {
           type:           i.outageType || i.messageType || 'Outage',
           reason:         i.reasonForUnavailability || i.eventType || i.messageHeadline || '',
           unavailable_mw: i.unavailableCapacity ?? i.affectedCapacity ?? null,
+          normal_mw:      i.normalCapacity ?? i.normalCapacityMW ?? null,
           start:          i.eventStart || i.effectiveFrom || i.startTime || '',
           end:            i.eventEnd   || i.effectiveTo   || i.endTime   || '',
         });
@@ -203,19 +203,28 @@ async function fetchREMIT(now) {
     } catch(e) {}
   }));
 
-  // Mark active outages (start <= now <= end)
+  // Mark status: active, upcoming, ended
   const nowMs = now.getTime();
   allItems.forEach(i => {
-    i.active = i.start && i.end
-      ? new Date(i.start).getTime() <= nowMs && new Date(i.end).getTime() >= nowMs
-      : i.start ? new Date(i.start).getTime() <= nowMs : false;
+    const s = i.start ? new Date(i.start).getTime() : 0;
+    const e = i.end   ? new Date(i.end).getTime()   : 0;
+    i.active   = s > 0 && e > 0 && s <= nowMs && e >= nowMs;
+    i.upcoming = s > nowMs;
+    i.ended    = e > 0 && e < nowMs;
   });
 
-  allItems.sort((a, b) => (a.active === b.active ? 0 : a.active ? -1 : 1));
+  // Sort: active first, then upcoming by start date, then ended
+  allItems.sort((a, b) => {
+    if (a.active && !b.active) return -1;
+    if (!a.active && b.active) return 1;
+    if (a.upcoming && !b.upcoming) return -1;
+    if (!a.upcoming && b.upcoming) return 1;
+    return new Date(b.start) - new Date(a.start);
+  });
 
   return {
-    total_found:          allItems.length,
-    notices:              allItems.slice(0, 25),
-    monitored_count:      bmuPrefixes.length,
+    total_found:     allItems.length,
+    notices:         allItems.slice(0, 30),
+    monitored_count: bmuPrefixes.length,
   };
 }
