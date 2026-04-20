@@ -165,66 +165,96 @@ async function fetchWindSolarForecast(today, tomorrow) {
 // ── REMIT ─────────────────────────────────────────────────────────────────────
 
 async function fetchREMIT(now) {
-  // Exact same working pattern as ccgt.js:
-  // from = date-only string, to = date-only string, bmUnit = prefix (no unit number)
-  const from30d = new Date(now - 30  * 86400000).toISOString().split('T')[0];
-  const to90d   = new Date(now + 90  * 86400000).toISOString().split('T')[0];
+  // Step 1: get message list via remit/list/by-publish
+  // Step 2: fetch full details for each relevant message
+  const from30d = new Date(now - 30  * 86400000).toISOString();
+  const to90d   = new Date(now + 90  * 86400000).toISOString();
 
-  const bmuPrefixes = [
-    { prefix: 'T_SCCL',  name: 'Saltend (Triton Power)',  site: 'Saltend Chemicals Park' },
-    { prefix: 'T_KILNO', name: 'Killingholme A',          site: 'South Humber Bank' },
-    { prefix: 'T_KILNS', name: 'Killingholme B',          site: 'South Humber Bank' },
-    { prefix: 'T_KEAD',  name: 'Keadby',                  site: 'Scunthorpe / Humber' },
-    { prefix: 'T_SOHU',  name: 'South Humber Bank',       site: 'South Humber Bank' },
-    { prefix: 'T_TEAB',  name: 'Teesside Power',          site: 'Teesside chemical cluster' },
-  ];
+  const BMU_META = {
+    'T_SCCL-1':  { name: 'Saltend Unit 1 (Triton)',  site: 'Saltend Chemicals Park' },
+    'T_SCCL-2':  { name: 'Saltend Unit 2 (Triton)',  site: 'Saltend Chemicals Park' },
+    'T_SCCL-3':  { name: 'Saltend Unit 3 (Triton)',  site: 'Saltend Chemicals Park' },
+    'T_KILNO-1': { name: 'Killingholme A',            site: 'South Humber Bank' },
+    'T_KILNS-1': { name: 'Killingholme B',            site: 'South Humber Bank' },
+    'T_KEAD-1':  { name: 'Keadby 1',                 site: 'Scunthorpe / Humber' },
+    'T_KEAD-2':  { name: 'Keadby 2',                 site: 'Scunthorpe / Humber' },
+    'T_SOHU-1':  { name: 'South Humber Bank',         site: 'South Humber Bank' },
+    'T_TEAB-1':  { name: 'Teesside Power',            site: 'Teesside' },
+  };
+  const BMU_PREFIXES = ['T_SCCL', 'T_KILNO', 'T_KILNS', 'T_KEAD', 'T_SOHU', 'T_TEAB'];
 
-  const allItems = [];
-  await Promise.allSettled(bmuPrefixes.map(async ({ prefix, name, site }) => {
+  // Fetch message list for each BMU prefix in parallel
+  const listUrl = (prefix) =>
+    `${BASE}/remit/list/by-publish?from=${from30d}&to=${to90d}&assetId=${prefix}&latestRevisionOnly=true&profileOnly=false`;
+
+  const allIds = new Map(); // id -> { url, prefix }
+  await Promise.allSettled(BMU_PREFIXES.map(async prefix => {
     try {
-      const url = `${BASE}/datasets/REMIT?from=${from30d}&to=${to90d}&bmUnit=${prefix}`;
-      const r = await ft(url, 8000);
+      const r = await ft(listUrl(prefix), 8000);
       if (!r.ok) return;
       const d = await r.json();
-      const items = d.data || d.items || [];
-      items.forEach(i => {
-        allItems.push({
-          bmu:            i.bmUnit || i.assetId || prefix,
-          plant_name:     name,
-          chemical_site:  site,
-          type:           i.outageType || i.messageType || 'Outage',
-          reason:         i.reasonForUnavailability || i.eventType || i.messageHeadline || '',
-          unavailable_mw: i.unavailableCapacity ?? i.affectedCapacity ?? null,
-          normal_mw:      i.normalCapacity ?? i.normalCapacityMW ?? null,
-          start:          i.eventStart || i.effectiveFrom || i.startTime || '',
-          end:            i.eventEnd   || i.effectiveTo   || i.endTime   || '',
-        });
+      (d.data || []).forEach(msg => {
+        if (msg.id && !allIds.has(msg.id)) {
+          allIds.set(msg.id, msg.url || `${BASE}/remit/${msg.id}`);
+        }
       });
     } catch(e) {}
   }));
 
-  // Mark status: active, upcoming, ended
-  const nowMs = now.getTime();
-  allItems.forEach(i => {
-    const s = i.start ? new Date(i.start).getTime() : 0;
-    const e = i.end   ? new Date(i.end).getTime()   : 0;
-    i.active   = s > 0 && e > 0 && s <= nowMs && e >= nowMs;
-    i.upcoming = s > nowMs;
-    i.ended    = e > 0 && e < nowMs;
-  });
+  if (!allIds.size) {
+    return { total_found: 0, notices: [], monitored_count: BMU_PREFIXES.length };
+  }
 
-  // Sort: active first, then upcoming by start date, then ended
-  allItems.sort((a, b) => {
-    if (a.active && !b.active) return -1;
-    if (!a.active && b.active) return 1;
+  // Step 2: fetch full details for each message in batches
+  const ids = [...allIds.entries()].slice(0, 50); // cap at 50
+  const details = [];
+  const BATCH = 8;
+  for (let i = 0; i < ids.length; i += BATCH) {
+    const batch = ids.slice(i, i + BATCH);
+    const settled = await Promise.allSettled(batch.map(async ([id, url]) => {
+      const r = await ft(url || `${BASE}/remit/${id}`, 7000);
+      if (!r.ok) return null;
+      const d = await r.json();
+      return d.data || d;
+    }));
+    settled.forEach(s => { if (s.status === 'fulfilled' && s.value) details.push(s.value); });
+  }
+
+  // Normalise each message
+  const nowMs = now.getTime();
+  const notices = details.map(msg => {
+    // Handle both array-wrapped and direct object responses
+    const m = Array.isArray(msg) ? msg[0] : msg;
+    if (!m) return null;
+    const bmu    = m.bmUnit || m.assetId || m.registeredResourceMRID || '';
+    const meta   = BMU_META[bmu] || BMU_META[bmu.replace(/-\d+$/, '-1')] || { name: bmu, site: 'Humber / Teesside' };
+    const start  = m.eventStart  || m.startTime  || m.effectiveFrom || '';
+    const end    = m.eventEnd    || m.endTime    || m.effectiveTo   || '';
+    const sMs    = start ? new Date(start).getTime() : 0;
+    const eMs    = end   ? new Date(end).getTime()   : 0;
+    return {
+      bmu,
+      plant_name:     meta.name,
+      chemical_site:  meta.site,
+      type:           m.outageType || m.messageType || m.unavailabilityType || '',
+      reason:         m.reasonForUnavailability || m.cause || m.messageHeadline || m.eventType || '',
+      unavailable_mw: m.unavailableCapacity ?? m.unavailableCapacityMW ?? m.affectedCapacity ?? null,
+      normal_mw:      m.normalCapacity ?? m.installedCapacity ?? null,
+      start, end,
+      active:   sMs > 0 && eMs > 0 && sMs <= nowMs && eMs >= nowMs,
+      upcoming: sMs > nowMs,
+      ended:    eMs > 0 && eMs < nowMs,
+    };
+  }).filter(Boolean);
+
+  // Sort: active → upcoming → ended
+  notices.sort((a, b) => {
+    if (a.active   && !b.active)   return -1;
+    if (!a.active  && b.active)    return 1;
     if (a.upcoming && !b.upcoming) return -1;
     if (!a.upcoming && b.upcoming) return 1;
     return new Date(b.start) - new Date(a.start);
   });
 
-  return {
-    total_found:     allItems.length,
-    notices:         allItems.slice(0, 30),
-    monitored_count: bmuPrefixes.length,
-  };
+  return { total_found: notices.length, notices: notices.slice(0, 30), monitored_count: BMU_PREFIXES.length };
 }
