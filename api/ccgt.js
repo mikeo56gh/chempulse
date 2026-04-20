@@ -3,6 +3,8 @@
 // Elexon BMRS Insights API — completely free, no API key required
 // BMU IDs: T_SCCL-1, T_SCCL-2, T_SCCL-3 (Saltend Cogeneration Company Ltd)
 
+export const config = { maxDuration: 60 };  // REMIT does ~75 sequential API calls
+
 const BASE = 'https://data.elexon.co.uk/bmrs/api/v1';
 const SALTEND_BMUS = ['T_SCCL-1', 'T_SCCL-2', 'T_SCCL-3'];
 
@@ -63,22 +65,100 @@ async function handleLive(req, res) {
     result.units.push(unit);
   }
 
-  // REMIT notices
+  // REMIT notices — proper 2-step flow with 7-day windows (Elexon hard limit)
+  // Step 1: /remit/list/by-publish per Saltend unit per weekly window
+  // Step 2: /remit?messageId=... bulk fetch details
   try {
-    const r = await fetch(
-      `${BASE}/datasets/REMIT?from=${from7d}&to=${today}&bmUnit=T_SCCL`,
-      { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(6000) }
-    );
-    if (r.ok) {
-      const d = await r.json();
-      result.remit_outages = (d.data || d.items || []).slice(0, 10).map(i => ({
-        bmu: i.bmUnit || i.assetId,
-        type: i.outageType || i.messageType || 'Outage',
-        reason: i.reasonForUnavailability || i.eventType || i.messageHeadline || '',
-        unavailableMW: i.unavailableCapacity ?? i.affectedCapacity ?? null,
-        startTime: i.eventStart || i.effectiveFrom,
-        endTime: i.eventEnd || i.effectiveTo
+    const WEEKS_BACK = 12;      // 3 months history
+    const WEEKS_FORWARD = 13;   // ~3 months ahead for planned shutdowns
+
+    // Build weekly windows
+    const windows = [];
+    for (let w = -WEEKS_BACK; w < WEEKS_FORWARD; w++) {
+      const f = new Date(now.getTime() + w * 7 * 86400000).toISOString().replace(/\.\d{3}Z$/, 'Z');
+      const t = new Date(now.getTime() + (w + 1) * 7 * 86400000).toISOString().replace(/\.\d{3}Z$/, 'Z');
+      windows.push({ from: f, to: t });
+    }
+
+    // Step 1: collect message IDs for all 3 Saltend units across all windows
+    const msgIds = new Set();
+    const pairs = [];
+    for (const bmu of SALTEND_BMUS) {
+      for (const win of windows) {
+        pairs.push({ bmu, win });
+      }
+    }
+
+    const CHUNK = 15;
+    for (let p = 0; p < pairs.length; p += CHUNK) {
+      const batch = pairs.slice(p, p + CHUNK);
+      await Promise.allSettled(batch.map(async ({ bmu, win }) => {
+        try {
+          const url = `${BASE}/remit/list/by-publish?from=${win.from}&to=${win.to}&assetId=${bmu}&latestRevisionOnly=true`;
+          const r = await fetch(url, {
+            headers: { Accept: 'application/json' },
+            signal: AbortSignal.timeout(6000)
+          });
+          if (!r.ok) return;
+          const d = await r.json();
+          (d.data || []).forEach(m => { if (m.id) msgIds.add(m.id); });
+        } catch (e) {}
       }));
+    }
+
+    // Step 2: bulk fetch full message details
+    if (msgIds.size) {
+      const idList = [...msgIds];
+      const details = [];
+      const BULK = 40;
+      for (let i = 0; i < idList.length; i += BULK) {
+        const batch = idList.slice(i, i + BULK);
+        const qs = batch.map(id => `messageId=${id}`).join('&');
+        try {
+          const r = await fetch(`${BASE}/remit?${qs}`, {
+            headers: { Accept: 'application/json' },
+            signal: AbortSignal.timeout(12000)
+          });
+          if (!r.ok) continue;
+          const d = await r.json();
+          (d.data || []).forEach(m => details.push(m));
+        } catch (e) {}
+      }
+
+      // Normalise using exact API field names, add active/upcoming/ended flags
+      const nowMs = now.getTime();
+      result.remit_outages = details.map(m => {
+        const start = m.eventStartTime || '';
+        const end   = m.eventEndTime   || '';
+        const sMs   = start ? new Date(start).getTime() : 0;
+        const eMs   = end   ? new Date(end).getTime()   : 0;
+        return {
+          bmu:           m.assetId || m.affectedUnit || '',
+          type:          m.unavailabilityType || m.messageType || 'Outage',
+          reason:        m.cause || m.messageHeading || m.relatedInformation || '',
+          eventType:     m.eventType || '',
+          unavailableMW: m.unavailableCapacity ?? null,
+          normalMW:      m.normalCapacity ?? null,
+          availableMW:   m.availableCapacity ?? null,
+          eventStatus:   m.eventStatus || '',
+          publishTime:   m.publishTime || m.createdTime || '',
+          startTime:     start,
+          endTime:       end,
+          active:   sMs > 0 && eMs > 0 && sMs <= nowMs && eMs >= nowMs,
+          upcoming: sMs > nowMs,
+          ended:    eMs > 0 && eMs < nowMs,
+        };
+      }).filter(m => m.bmu && m.bmu.startsWith('T_SCCL'));
+
+      // Sort: active → upcoming → ended (most recent first within each)
+      result.remit_outages.sort((a, b) => {
+        if (a.active   && !b.active)   return -1;
+        if (!a.active  && b.active)    return 1;
+        if (a.upcoming && !b.upcoming) return -1;
+        if (!a.upcoming && b.upcoming) return 1;
+        if (a.upcoming && b.upcoming) return new Date(a.startTime) - new Date(b.startTime);
+        return new Date(b.startTime) - new Date(a.startTime);
+      });
     }
   } catch (e) {}
 
