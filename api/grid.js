@@ -165,58 +165,57 @@ async function fetchWindSolarForecast(today, tomorrow) {
 // ── REMIT ─────────────────────────────────────────────────────────────────────
 
 async function fetchREMIT(now) {
-  const from14 = new Date(now - 14 * 24 * 60 * 60 * 1000).toISOString();
-  const to14   = new Date(now + 14 * 24 * 60 * 60 * 1000).toISOString();
-  const from14d = from14.split('T')[0], to14d = to14.split('T')[0];
+  // Use the same working pattern as ccgt.js:
+  // /datasets/REMIT?from=...&to=...&bmUnit=... (simple date range + BMU prefix)
+  const from7d  = new Date(now - 7  * 86400000).toISOString().split('T')[0];
+  const to14d   = new Date(now + 14 * 86400000).toISOString().split('T')[0];
 
-  const endpoints = [
-    `${BASE}/datasets/REMIT?publishDateTimeFrom=${from14}&publishDateTimeTo=${to14}`,
-    `${BASE}/datasets/REMIT?from=${from14d}&to=${to14d}`,
-    `${BASE}/remit/list/by-publish?publishDateTimeFrom=${from14}&publishDateTimeTo=${to14}`,
-    `${BASE}/datasets/REMIT?eventStartFrom=${from14d}&eventEndTo=${to14d}`,
+  // Fetch per cluster in parallel — one request per BMU prefix
+  const bmuPrefixes = [
+    { prefix: 'T_SCCL',  name: 'Saltend (Triton Power)',  site: 'Saltend Chemicals Park' },
+    { prefix: 'T_KILNO', name: 'Killingholme A',          site: 'South Humber Bank' },
+    { prefix: 'T_KILNS', name: 'Killingholme B',          site: 'South Humber Bank' },
+    { prefix: 'T_KEAD',  name: 'Keadby',                  site: 'Scunthorpe / Humber' },
+    { prefix: 'T_SOHU',  name: 'South Humber Bank',       site: 'South Humber Bank' },
+    { prefix: 'T_TEAB',  name: 'Teesside Power',          site: 'Teesside chemical cluster' },
   ];
 
-  let items = [], lastError = '', successUrl = '';
-  for (const url of endpoints) {
+  const allItems = [];
+  await Promise.allSettled(bmuPrefixes.map(async ({ prefix, name, site }) => {
     try {
-      const r = await ft(url, 7000);
-      if (r.ok) { const d = await r.json(); items = d.data||d.items||d.remitList||[]; successUrl = url; break; }
-      else lastError = `HTTP ${r.status}`;
-    } catch(e) { lastError = e.message; }
-  }
+      const url = `${BASE}/datasets/REMIT?from=${from7d}&to=${to14d}&bmUnit=${prefix}`;
+      const r = await ft(url, 8000);
+      if (!r.ok) return;
+      const d = await r.json();
+      const items = d.data || d.items || [];
+      items.forEach(i => {
+        allItems.push({
+          bmu:            i.bmUnit || i.assetId || prefix,
+          plant_name:     name,
+          chemical_site:  site,
+          type:           i.outageType || i.messageType || 'Outage',
+          reason:         i.reasonForUnavailability || i.eventType || i.messageHeadline || '',
+          unavailable_mw: i.unavailableCapacity ?? i.affectedCapacity ?? null,
+          start:          i.eventStart || i.effectiveFrom || i.startTime || '',
+          end:            i.eventEnd   || i.effectiveTo   || i.endTime   || '',
+        });
+      });
+    } catch(e) {}
+  }));
 
-  const bmuSet  = new Set(ALL_MONITORED.map(b => b.id));
-  const bmuMeta = ALL_MONITORED.reduce((m, b) => { m[b.id] = b; return m; }, {});
-  const nowMs   = now.getTime();
-
-  const relevant = items.filter(i => {
-    const bmu = i.bmUnit || i.assetId || i.bmuName || '';
-    return bmuSet.has(bmu) || [...bmuSet].some(id => bmu.startsWith(id.replace(/-\d+$/, '')));
+  // Mark active outages (start <= now <= end)
+  const nowMs = now.getTime();
+  allItems.forEach(i => {
+    i.active = i.start && i.end
+      ? new Date(i.start).getTime() <= nowMs && new Date(i.end).getTime() >= nowMs
+      : i.start ? new Date(i.start).getTime() <= nowMs : false;
   });
 
-  const notices = relevant.slice(0, 20).map(i => {
-    const bmu  = i.bmUnit || i.assetId || i.bmuName || '';
-    const meta = bmuMeta[bmu] || { name: bmu, site: 'Humber / Teesside' };
-    const start = i.eventStart || i.effectiveFrom || i.startTime || '';
-    const end   = i.eventEnd   || i.effectiveTo   || i.endTime   || '';
-    const active = start && end
-      ? new Date(start).getTime() <= nowMs && new Date(end).getTime() >= nowMs
-      : start ? new Date(start).getTime() <= nowMs : false;
-    return {
-      bmu, plant_name: meta.name, chemical_site: meta.site,
-      type: i.outageType || i.messageType || 'Outage',
-      reason: i.reasonForUnavailability || i.eventType || i.messageHeadline || '',
-      unavailable_mw: i.unavailableCapacity ?? i.affectedCapacity ?? null,
-      start, end, active,
-    };
-  }).sort((a, b) => a.active === b.active ? 0 : a.active ? -1 : 1);
+  allItems.sort((a, b) => (a.active === b.active ? 0 : a.active ? -1 : 1));
 
   return {
-    total_found: relevant.length,
-    total_in_response: items.length,
-    notices,
-    monitored_count: ALL_MONITORED.length,
-    success_url: successUrl || null,
-    last_error: lastError || null,
+    total_found:          allItems.length,
+    notices:              allItems.slice(0, 25),
+    monitored_count:      bmuPrefixes.length,
   };
 }
