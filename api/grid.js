@@ -121,36 +121,57 @@ async function fetchFuelMix(now) {
 }
 
 // ── WIND/SOLAR FORECAST ───────────────────────────────────────────────────────
+// Uses NESO Day-Ahead Wind Forecast via CKAN datastore
+// https://api.neso.energy/api/3/action/datastore_search?resource_id=b2f03146-f05d-4824-a663-3a4f36090c71
+// Fields: Datetime_GMT, Date, Settlement_period, Capacity (MW), Incentive_forecast (MW)
+// Published daily 09:00-09:15 UK time, 48 half-hour periods for the next day
 
 async function fetchWindSolarForecast(today, tomorrow) {
-  var url = BASE + '/forecast/generation/wind-and-solar/day-ahead?from=' + today + '&to=' + tomorrow + '&processType=Day%20Ahead';
-  var r = await ft(url);
-  if (!r.ok) throw new Error('Wind/Solar ' + r.status);
+  // Query NESO CKAN datastore — pull most recent forecasts, sorted by datetime desc
+  // Limit 200 gets 4+ days of forecasts, we then filter to tomorrow onwards
+  var url = 'https://api.neso.energy/api/3/action/datastore_search?resource_id=b2f03146-f05d-4824-a663-3a4f36090c71&limit=200&sort=Datetime_GMT%20desc';
+  var r = await ft(url, 10000);
+  if (!r.ok) throw new Error('NESO wind ' + r.status);
   var d = await r.json();
-  var items = (d.data || []).sort(function(a, b) {
-    return new Date(a.startTime || a.publishTime || 0) - new Date(b.startTime || b.publishTime || 0);
-  });
-  if (!items.length) throw new Error('No forecast data');
+  var records = d.result && d.result.records ? d.result.records : [];
+  if (!records.length) throw new Error('NESO returned no records');
 
-  var records = items.map(function(i) {
-    return {
-      time: i.startTime || i.publishTime || '',
-      wind_mw: Math.round(i.wind || i.windGeneration || 0),
-      solar_mw: Math.round(i.solar || i.solarGeneration || 0),
-    };
-  });
+  // Filter to future/current periods only, sort ascending by datetime
+  var now = new Date();
+  var nowMs = now.getTime();
 
-  var windVals = records.map(function(r) { return r.wind_mw; }).filter(function(v) { return v > 0; });
-  var avgWind = windVals.length ? Math.round(windVals.reduce(function(s, v) { return s + v; }, 0) / windVals.length) : 0;
+  var upcoming = records
+    .map(function(rec) {
+      var dt = rec.Datetime_GMT || rec.DATE || rec.Date;
+      var windMW = rec.Incentive_forecast;
+      if (windMW == null) windMW = rec.wind_forecast;
+      if (windMW == null) windMW = rec.Wind || 0;
+      return {
+        time: dt,
+        wind_mw: Math.round(Number(windMW) || 0),
+        solar_mw: 0, // NESO day-ahead wind doesn't include solar
+      };
+    })
+    .filter(function(r) {
+      if (!r.time) return false;
+      var t = new Date(r.time).getTime();
+      return !isNaN(t) && t >= nowMs - 3600000; // include last hour for continuity
+    })
+    .sort(function(a, b) { return new Date(a.time) - new Date(b.time); })
+    .slice(0, 48); // next 24h
+
+  var windVals = upcoming.map(function(r) { return r.wind_mw; }).filter(function(v) { return v > 0; });
+  var avgWind  = windVals.length ? Math.round(windVals.reduce(function(s, v) { return s + v; }, 0) / windVals.length) : 0;
   var peakWind = windVals.length ? Math.max.apply(null, windVals) : 0;
 
   return {
-    records: records,
+    records: upcoming,
     avg_wind_mw: avgWind,
     peak_wind_mw: peakWind,
     outlook: peakWind > 12000 ? 'HIGH — strong wind expected, lower power costs'
-           : peakWind > 6000 ? 'MODERATE — mixed wind generation'
-           : 'LOW — limited wind, gas likely dominant',
+           : peakWind > 6000  ? 'MODERATE — mixed wind generation'
+           : peakWind > 0     ? 'LOW — limited wind, gas likely dominant'
+           : 'Forecast data unavailable for next 24h',
   };
 }
 
