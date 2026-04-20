@@ -1,44 +1,26 @@
-// api/grid.js — Grid Intelligence for ChemPulse
-// Elexon BMRS: fuel mix, wind/solar forecast, REMIT outages
-// All free, no API key required
-
-export const config = { maxDuration: 60 };  // REMIT does ~225 sequential API calls
+// api/grid.js — ChemPulse grid intelligence
+// Elexon BMRS: fuel mix + wind forecast + REMIT outages
 
 const BASE = 'https://data.elexon.co.uk/bmrs/api/v1';
 
-const HUMBER_BMUS = [
-  { id: 'T_SCCL-1',  name: 'Saltend (Triton Power)',  site: 'Saltend Chemicals Park' },
-  { id: 'T_SCCL-2',  name: 'Saltend (Triton Power)',  site: 'Saltend Chemicals Park' },
-  { id: 'T_SCCL-3',  name: 'Saltend (Triton Power)',  site: 'Saltend Chemicals Park' },
-  { id: 'T_KILNO-1', name: 'Killingholme A',          site: 'South Humber Bank' },
-  { id: 'T_KILNS-1', name: 'Killingholme B',          site: 'South Humber Bank' },
-  { id: 'T_KEAD-1',  name: 'Keadby 1',               site: 'Scunthorpe / Humber' },
-  { id: 'T_KEAD-2',  name: 'Keadby 2 (CCGT)',        site: 'Scunthorpe / Humber' },
-  { id: 'T_SOHU-1',  name: 'South Humber Bank',       site: 'South Humber Bank' },
-];
-const TEESSIDE_BMUS = [
-  { id: 'T_TEAB-1',  name: 'Teesside Power',          site: 'Teesside chemical cluster' },
-  { id: 'T_CARR-1',  name: 'Hartlepool (EDF)',         site: 'Teesside' },
-];
-const ALL_MONITORED = [...HUMBER_BMUS, ...TEESSIDE_BMUS];
-
-function ft(url, ms = 9000) {
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), ms);
+function ft(url, ms) {
+  ms = ms || 8000;
+  var ctrl = new AbortController();
+  var t = setTimeout(function() { ctrl.abort(); }, ms);
   return fetch(url, { headers: { Accept: 'application/json' }, signal: ctrl.signal })
-    .finally(() => clearTimeout(t));
+    .finally(function() { clearTimeout(t); });
 }
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Cache-Control', 's-maxage=300');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const now = new Date();
-  const today = now.toISOString().split('T')[0];
-  const tomorrow = new Date(now.getTime() + 86400000).toISOString().split('T')[0];
+  var now = new Date();
+  var today = now.toISOString().split('T')[0];
+  var tomorrow = new Date(now.getTime() + 86400000).toISOString().split('T')[0];
 
-  const [fuelR, windR, remitR] = await Promise.allSettled([
+  var results = await Promise.allSettled([
     fetchFuelMix(now),
     fetchWindSolarForecast(today, tomorrow),
     fetchREMIT(now),
@@ -47,247 +29,267 @@ export default async function handler(req, res) {
   res.status(200).json({
     asOf: now.toISOString(),
     source: 'Elexon BMRS — free, no key',
-    fuel_mix:       fuelR.status  === 'fulfilled' ? fuelR.value  : null,
-    fuel_error:     fuelR.status  === 'rejected'  ? fuelR.reason?.message : undefined,
-    wind_forecast:  windR.status  === 'fulfilled' ? windR.value  : null,
-    wind_error:     windR.status  === 'rejected'  ? windR.reason?.message : undefined,
-    remit:          remitR.status === 'fulfilled' ? remitR.value : null,
-    remit_error:    remitR.status === 'rejected'  ? remitR.reason?.message : undefined,
+    fuel_mix: results[0].status === 'fulfilled' ? results[0].value : null,
+    fuel_error: results[0].status === 'rejected' ? String(results[0].reason) : undefined,
+    wind_forecast: results[1].status === 'fulfilled' ? results[1].value : null,
+    wind_error: results[1].status === 'rejected' ? String(results[1].reason) : undefined,
+    remit: results[2].status === 'fulfilled' ? results[2].value : null,
+    remit_error: results[2].status === 'rejected' ? String(results[2].reason) : undefined,
   });
-}
+};
 
 // ── FUELHH ────────────────────────────────────────────────────────────────────
 
 async function fetchFuelMix(now) {
-  const from = new Date(now - 25 * 60 * 60 * 1000).toISOString();
-  const r = await ft(`${BASE}/datasets/FUELHH?from=${from}&to=${now.toISOString()}`);
-  if (!r.ok) throw new Error(`FUELHH ${r.status}`);
-  const d = await r.json();
-  const items = d.data || d.items || [];
+  var from = new Date(now.getTime() - 25 * 60 * 60 * 1000).toISOString();
+  var r = await ft(BASE + '/datasets/FUELHH?from=' + from + '&to=' + now.toISOString());
+  if (!r.ok) throw new Error('FUELHH ' + r.status);
+  var d = await r.json();
+  var items = d.data || d.items || [];
 
-  const byPeriod = {};
-  items.forEach(i => {
-    const key = `${i.settlementDate}_${String(i.settlementPeriod).padStart(3,'0')}`;
+  var byPeriod = {};
+  items.forEach(function(i) {
+    var key = i.settlementDate + '_' + String(i.settlementPeriod).padStart(3, '0');
     if (!byPeriod[key]) byPeriod[key] = { date: i.settlementDate, period: i.settlementPeriod, fuels: {} };
-    const fuel = (i.fuelType || '').toUpperCase();
+    var fuel = (i.fuelType || '').toUpperCase();
     byPeriod[key].fuels[fuel] = (byPeriod[key].fuels[fuel] || 0) + (i.generation || i.quantity || 0);
   });
 
-  const periods = Object.values(byPeriod).sort((a, b) =>
-    `${b.date}_${String(b.period).padStart(3,'0')}`.localeCompare(`${a.date}_${String(a.period).padStart(3,'0')}`)
-  );
+  var periods = Object.values(byPeriod).sort(function(a, b) {
+    return (b.date + '_' + String(b.period).padStart(3, '0')).localeCompare(a.date + '_' + String(a.period).padStart(3, '0'));
+  });
   if (!periods.length) throw new Error('No FUELHH data');
 
-  const f     = periods[0].fuels;
-  const total = Object.values(f).reduce((s, v) => s + v, 0) || 1;
+  var f = periods[0].fuels;
+  var total = Object.values(f).reduce(function(s, v) { return s + v; }, 0) || 1;
 
-  const gas     = (f['CCGT']||0) + (f['OCGT']||0) + (f['GAS']||0);
-  const wind    = (f['WIND']||0) + (f['OFFSHORE WIND']||0);
-  const nuclear = f['NUCLEAR'] || f['NUC'] || 0;
-  const solar   = f['SOLAR'] || 0;
-  const coal    = (f['COAL']||0) + (f['OIL']||0);
-  const biomass = f['BIOMASS'] || 0;
-  const hydro   = f['NPSHYD'] || 0;
-  const pumped  = f['PS'] || 0;
-  const intFR   = f['INTFR']  || 0;
-  const intIRL  = f['INTIRL'] || 0;
-  const intNED  = f['INTNED'] || 0;
-  const intEW   = f['INTEW']  || 0;
-  const intNEM  = f['INTNEM'] || 0;
-  const intVKL  = f['INTVKL'] || 0;
-  const imports  = intFR + intIRL + intNED + intEW + intNEM + intVKL;
-  const other    = Math.max(0, total - gas - wind - nuclear - solar - coal - biomass - hydro - pumped - imports);
+  var gas = (f.CCGT || 0) + (f.OCGT || 0) + (f.GAS || 0);
+  var wind = (f.WIND || 0) + (f['OFFSHORE WIND'] || 0);
+  var nuclear = f.NUCLEAR || f.NUC || 0;
+  var solar = f.SOLAR || 0;
+  var coal = (f.COAL || 0) + (f.OIL || 0);
+  var biomass = f.BIOMASS || 0;
+  var hydro = f.NPSHYD || 0;
+  var pumped = f.PS || 0;
+  var intFR = f.INTFR || 0;
+  var intIRL = f.INTIRL || 0;
+  var intNED = f.INTNED || 0;
+  var intEW = f.INTEW || 0;
+  var intNEM = f.INTNEM || 0;
+  var intVKL = f.INTVKL || 0;
+  var imports = intFR + intIRL + intNED + intEW + intNEM + intVKL;
+  var other = Math.max(0, total - gas - wind - nuclear - solar - coal - biomass - hydro - pumped - imports);
 
-  const pct = v => total > 0 ? Math.round((v / total) * 100) : 0;
-  const gasPct = pct(gas);
+  function pct(v) { return total > 0 ? Math.round((v / total) * 100) : 0; }
+  var gasPct = pct(gas);
 
-  const history = periods.slice(0, 48).reverse().map(p => {
-    const pt = Object.values(p.fuels).reduce((s,v) => s+v, 0) || 1;
-    const pg = (p.fuels['CCGT']||0) + (p.fuels['OCGT']||0) + (p.fuels['GAS']||0);
-    const pw = (p.fuels['WIND']||0) + (p.fuels['OFFSHORE WIND']||0);
-    return { date: p.date, period: p.period, gas_pct: Math.round((pg/pt)*100), wind_pct: Math.round((pw/pt)*100) };
+  var history = periods.slice(0, 48).reverse().map(function(p) {
+    var pt = Object.values(p.fuels).reduce(function(s, v) { return s + v; }, 0) || 1;
+    var pg = (p.fuels.CCGT || 0) + (p.fuels.OCGT || 0) + (p.fuels.GAS || 0);
+    var pw = (p.fuels.WIND || 0) + (p.fuels['OFFSHORE WIND'] || 0);
+    return {
+      date: p.date,
+      period: p.period,
+      gas_pct: Math.round((pg / pt) * 100),
+      wind_pct: Math.round((pw / pt) * 100),
+    };
   });
 
   return {
     settlement_date: periods[0].date,
     settlement_period: periods[0].period,
     total_mw: Math.round(total),
-    gas_mw: Math.round(gas),         gas_pct: gasPct,
-    wind_mw: Math.round(wind),       wind_pct: pct(wind),
+    gas_mw: Math.round(gas), gas_pct: gasPct,
+    wind_mw: Math.round(wind), wind_pct: pct(wind),
     nuclear_mw: Math.round(nuclear), nuclear_pct: pct(nuclear),
-    solar_mw: Math.round(solar),     solar_pct: pct(solar),
-    coal_mw: Math.round(coal),       coal_pct: pct(coal),
+    solar_mw: Math.round(solar), solar_pct: pct(solar),
+    coal_mw: Math.round(coal), coal_pct: pct(coal),
     biomass_mw: Math.round(biomass), biomass_pct: pct(biomass),
-    hydro_mw: Math.round(hydro+pumped), hydro_pct: pct(hydro+pumped),
+    hydro_mw: Math.round(hydro + pumped), hydro_pct: pct(hydro + pumped),
     imports_mw: Math.round(imports), imports_pct: pct(imports),
-    other_mw: Math.round(other),     other_pct: pct(other),
+    other_mw: Math.round(other), other_pct: pct(other),
     interconnectors: {
-      france_mw:      Math.round(intFR),
-      ireland_mw:     Math.round(intIRL + intEW),
+      france_mw: Math.round(intFR),
+      ireland_mw: Math.round(intIRL + intEW),
       netherlands_mw: Math.round(intNED),
-      belgium_mw:     Math.round(intNEM),
-      denmark_mw:     Math.round(intVKL),
+      belgium_mw: Math.round(intNEM),
+      denmark_mw: Math.round(intVKL),
     },
     cost_pressure: gasPct > 45 ? 'high' : gasPct > 25 ? 'medium' : 'low',
-    history,
+    history: history,
   };
 }
 
-// ── WIND/SOLAR FORECAST (Elexon BMRS — same source as Weather tab) ────────────
+// ── WIND/SOLAR FORECAST ───────────────────────────────────────────────────────
 
 async function fetchWindSolarForecast(today, tomorrow) {
-  const url = `${BASE}/forecast/generation/wind-and-solar/day-ahead` +
-    `?from=${today}&to=${tomorrow}&processType=Day%20Ahead`;
-  const r = await ft(url);
-  if (!r.ok) throw new Error(`Wind/Solar forecast ${r.status}`);
-  const d = await r.json();
-  const items = (d.data || []).sort((a, b) => new Date(a.startTime||a.publishTime||0) - new Date(b.startTime||b.publishTime||0));
-  if (!items.length) throw new Error('No wind/solar forecast data');
+  var url = BASE + '/forecast/generation/wind-and-solar/day-ahead?from=' + today + '&to=' + tomorrow + '&processType=Day%20Ahead';
+  var r = await ft(url);
+  if (!r.ok) throw new Error('Wind/Solar ' + r.status);
+  var d = await r.json();
+  var items = (d.data || []).sort(function(a, b) {
+    return new Date(a.startTime || a.publishTime || 0) - new Date(b.startTime || b.publishTime || 0);
+  });
+  if (!items.length) throw new Error('No forecast data');
 
-  const records = items.map(i => ({
-    time: i.startTime || i.publishTime || '',
-    wind_mw: Math.round(i.wind || i.windGeneration || 0),
-    solar_mw: Math.round(i.solar || i.solarGeneration || 0),
-  }));
+  var records = items.map(function(i) {
+    return {
+      time: i.startTime || i.publishTime || '',
+      wind_mw: Math.round(i.wind || i.windGeneration || 0),
+      solar_mw: Math.round(i.solar || i.solarGeneration || 0),
+    };
+  });
 
-  const windVals = records.map(r => r.wind_mw).filter(v => v > 0);
-  const avgWind = windVals.length ? Math.round(windVals.reduce((s,v) => s+v, 0) / windVals.length) : 0;
-  const peakWind = Math.max(...windVals, 0);
+  var windVals = records.map(function(r) { return r.wind_mw; }).filter(function(v) { return v > 0; });
+  var avgWind = windVals.length ? Math.round(windVals.reduce(function(s, v) { return s + v; }, 0) / windVals.length) : 0;
+  var peakWind = windVals.length ? Math.max.apply(null, windVals) : 0;
 
   return {
-    records,
+    records: records,
     avg_wind_mw: avgWind,
     peak_wind_mw: peakWind,
     outlook: peakWind > 12000 ? 'HIGH — strong wind expected, lower power costs'
-           : peakWind > 6000  ? 'MODERATE — mixed wind generation'
+           : peakWind > 6000 ? 'MODERATE — mixed wind generation'
            : 'LOW — limited wind, gas likely dominant',
   };
 }
 
 // ── REMIT ─────────────────────────────────────────────────────────────────────
-// Two-step flow with 7-day windows (Elexon enforces 7-day max per request)
-// Step 1: /remit/list/by-publish?assetId=X&from=Y&to=Z → message IDs
-// Step 2: /remit?messageId=A&messageId=B&... → full message details
+// /remit/list/by-publish with 7-day max window — hard API limit
+// Followed by bulk fetch /remit?messageId=...
 
 async function fetchREMIT(now) {
-  const WEEKS_BACK    = 12;  // 3 months of history
-  const WEEKS_FORWARD = 13;  // ~3 months ahead (upcoming planned outages)
+  var WEEKS_BACK = 12;
+  var WEEKS_FORWARD = 13;
 
-  // All 9 assets queried individually — API requires exact assetId, not prefix
-  const ASSETS = [
-    { id: "T_SCCL-1",  name: "Saltend Unit 1",    site: "Saltend Chemicals Park" },
-    { id: "T_SCCL-2",  name: "Saltend Unit 2",    site: "Saltend Chemicals Park" },
-    { id: "T_SCCL-3",  name: "Saltend Unit 3",    site: "Saltend Chemicals Park" },
-    { id: "T_KILNO-1", name: "Killingholme A",     site: "South Humber Bank" },
-    { id: "T_KILNS-1", name: "Killingholme B",     site: "South Humber Bank" },
-    { id: "T_KEAD-1",  name: "Keadby 1",          site: "Scunthorpe / Humber" },
-    { id: "T_KEAD-2",  name: "Keadby 2",          site: "Scunthorpe / Humber" },
-    { id: "T_SOHU-1",  name: "South Humber Bank",  site: "South Humber Bank" },
-    { id: "T_TEAB-1",  name: "Teesside Power",     site: "Teesside" },
+  var ASSETS = [
+    { id: 'T_SCCL-1', name: 'Saltend Unit 1', site: 'Saltend Chemicals Park' },
+    { id: 'T_SCCL-2', name: 'Saltend Unit 2', site: 'Saltend Chemicals Park' },
+    { id: 'T_SCCL-3', name: 'Saltend Unit 3', site: 'Saltend Chemicals Park' },
+    { id: 'T_KILNO-1', name: 'Killingholme A', site: 'South Humber Bank' },
+    { id: 'T_KILNS-1', name: 'Killingholme B', site: 'South Humber Bank' },
+    { id: 'T_KEAD-1', name: 'Keadby 1', site: 'Scunthorpe / Humber' },
+    { id: 'T_KEAD-2', name: 'Keadby 2', site: 'Scunthorpe / Humber' },
+    { id: 'T_SOHU-1', name: 'South Humber Bank', site: 'South Humber Bank' },
+    { id: 'T_TEAB-1', name: 'Teesside Power', site: 'Teesside' },
   ];
-  const assetMeta = Object.fromEntries(ASSETS.map(a => [a.id, a]));
+  var assetMeta = {};
+  ASSETS.forEach(function(a) { assetMeta[a.id] = a; });
 
-  // Build weekly windows — API enforces 7-day max per request
-  const windows = [];
-  for (let w = -WEEKS_BACK; w < WEEKS_FORWARD; w++) {
-    const from = new Date(now.getTime() + w * 7 * 86400000).toISOString().replace(/\.\d{3}Z$/, 'Z');
-    const to   = new Date(now.getTime() + (w + 1) * 7 * 86400000).toISOString().replace(/\.\d{3}Z$/, 'Z');
-    windows.push({ from, to });
+  // Build weekly windows
+  var windows = [];
+  for (var w = -WEEKS_BACK; w < WEEKS_FORWARD; w++) {
+    var f = new Date(now.getTime() + w * 7 * 86400000).toISOString().replace(/\.\d{3}Z$/, 'Z');
+    var t = new Date(now.getTime() + (w + 1) * 7 * 86400000).toISOString().replace(/\.\d{3}Z$/, 'Z');
+    windows.push({ from: f, to: t });
   }
 
-  // Step 1: Collect message IDs in parallel
-  // 9 assets × ~25 windows = 225 requests — run in chunks to avoid overwhelming the API
-  const msgIds = new Set();
-  const step1Stats = { requests: 0, ok: 0, errors: 0 };
+  var msgIds = {};
+  var step1 = { requests: 0, ok: 0, errors: 0, sample_error: null };
+  var firstSampleUrl = null;
 
-  // Flatten asset×window pairs, then process in chunks of 20 concurrent
-  const pairs = [];
-  for (const asset of ASSETS) {
-    for (const win of windows) {
-      pairs.push({ asset, win });
+  // Build all asset×window pairs, process in batches
+  var pairs = [];
+  for (var a = 0; a < ASSETS.length; a++) {
+    for (var wi = 0; wi < windows.length; wi++) {
+      pairs.push({ asset: ASSETS[a], win: windows[wi] });
     }
   }
 
-  const CHUNK = 20;
-  for (let i = 0; i < pairs.length; i += CHUNK) {
-    const batch = pairs.slice(i, i + CHUNK);
-    await Promise.allSettled(batch.map(async ({ asset, win }) => {
-      step1Stats.requests++;
+  var CHUNK = 15;
+  for (var p = 0; p < pairs.length; p += CHUNK) {
+    var batch = pairs.slice(p, p + CHUNK);
+    await Promise.allSettled(batch.map(async function(pair) {
+      step1.requests++;
+      var url = BASE + '/remit/list/by-publish?from=' + pair.win.from + '&to=' + pair.win.to + '&assetId=' + pair.asset.id + '&latestRevisionOnly=true';
+      if (!firstSampleUrl) firstSampleUrl = url;
       try {
-        const url = `${BASE}/remit/list/by-publish?from=${win.from}&to=${win.to}&assetId=${asset.id}&latestRevisionOnly=true&format=json`;
-        const r = await ft(url, 7000);
-        if (!r.ok) { step1Stats.errors++; return; }
-        const d = await r.json();
-        step1Stats.ok++;
-        (d.data || []).forEach(m => { if (m.id) msgIds.add(m.id); });
-      } catch(e) {
-        step1Stats.errors++;
+        var r = await ft(url, 6000);
+        if (!r.ok) {
+          step1.errors++;
+          if (!step1.sample_error) {
+            var errText = await r.text();
+            step1.sample_error = { status: r.status, body: errText.slice(0, 300), url: url };
+          }
+          return;
+        }
+        var d = await r.json();
+        step1.ok++;
+        (d.data || []).forEach(function(m) { if (m.id) msgIds[m.id] = true; });
+      } catch (e) {
+        step1.errors++;
+        if (!step1.sample_error) step1.sample_error = { fetch_err: String(e.message), url: url };
       }
     }));
   }
 
-  if (!msgIds.size) {
+  var idList = Object.keys(msgIds);
+
+  if (!idList.length) {
     return {
       total_found: 0,
       notices: [],
       monitored_count: ASSETS.length,
-      diagnostics: { step1: step1Stats, windows_tried: windows.length, assets_tried: ASSETS.length, note: 'No message IDs found across all windows' },
+      debug: {
+        step1: step1,
+        windows_count: windows.length,
+        assets_count: ASSETS.length,
+        sample_url: firstSampleUrl,
+        note: 'No message IDs returned',
+      },
     };
   }
 
-  // Step 2: Bulk fetch details in chunks of 50 IDs per request
-  const idArr = [...msgIds];
-  const allDetails = [];
-  const BULK = 50;
-  const step2Stats = { requests: 0, ok: 0, items: 0 };
-
-  for (let i = 0; i < idArr.length; i += BULK) {
-    const batch = idArr.slice(i, i + BULK);
-    step2Stats.requests++;
+  // Step 2: bulk fetch
+  var allDetails = [];
+  var step2 = { requests: 0, ok: 0, items: 0 };
+  var BULK = 40;
+  for (var i = 0; i < idList.length; i += BULK) {
+    var batchIds = idList.slice(i, i + BULK);
+    var qs = batchIds.map(function(id) { return 'messageId=' + id; }).join('&');
+    step2.requests++;
     try {
-      const qs = batch.map(id => `messageId=${id}`).join('&');
-      const r = await ft(`${BASE}/remit?${qs}&format=json`, 15000);
-      if (!r.ok) continue;
-      const d = await r.json();
-      step2Stats.ok++;
-      (d.data || []).forEach(m => allDetails.push(m));
-      step2Stats.items += (d.data || []).length;
-    } catch(e) {}
+      var r2 = await ft(BASE + '/remit?' + qs, 12000);
+      if (!r2.ok) continue;
+      var d2 = await r2.json();
+      step2.ok++;
+      (d2.data || []).forEach(function(m) { allDetails.push(m); });
+      step2.items = allDetails.length;
+    } catch (e) {}
   }
 
-  // Normalise using exact field names from API schema
-  const nowMs = now.getTime();
-  const notices = allDetails.map(m => {
-    const bmu   = m.assetId || m.affectedUnit || '';
-    const meta  = assetMeta[bmu] || { name: bmu, site: 'Humber / Teesside' };
-    const start = m.eventStartTime || '';
-    const end   = m.eventEndTime   || '';
-    const sMs   = start ? new Date(start).getTime() : 0;
-    const eMs   = end   ? new Date(end).getTime()   : 0;
+  var nowMs = now.getTime();
+  var notices = allDetails.map(function(m) {
+    var bmu = m.assetId || m.affectedUnit || '';
+    var meta = assetMeta[bmu] || { name: bmu, site: 'Humber / Teesside' };
+    var start = m.eventStartTime || '';
+    var end = m.eventEndTime || '';
+    var sMs = start ? new Date(start).getTime() : 0;
+    var eMs = end ? new Date(end).getTime() : 0;
     return {
-      bmu,
-      plant_name:     meta.name,
-      chemical_site:  meta.site,
-      type:           m.unavailabilityType || m.messageType || '',
-      reason:         m.cause || m.messageHeading || m.relatedInformation || '',
-      event_type:     m.eventType || '',
-      fuel_type:      m.fuelType || '',
-      unavailable_mw: m.unavailableCapacity ?? null,
-      normal_mw:      m.normalCapacity ?? null,
-      available_mw:   m.availableCapacity ?? null,
-      event_status:   m.eventStatus || '',
-      publish_time:   m.publishTime || m.createdTime || '',
-      start, end,
-      active:   sMs > 0 && eMs > 0 && sMs <= nowMs && eMs >= nowMs,
+      bmu: bmu,
+      plant_name: meta.name,
+      chemical_site: meta.site,
+      type: m.unavailabilityType || m.messageType || '',
+      reason: m.cause || m.messageHeading || m.relatedInformation || '',
+      event_type: m.eventType || '',
+      fuel_type: m.fuelType || '',
+      unavailable_mw: m.unavailableCapacity != null ? m.unavailableCapacity : null,
+      normal_mw: m.normalCapacity != null ? m.normalCapacity : null,
+      available_mw: m.availableCapacity != null ? m.availableCapacity : null,
+      event_status: m.eventStatus || '',
+      publish_time: m.publishTime || m.createdTime || '',
+      start: start,
+      end: end,
+      active: sMs > 0 && eMs > 0 && sMs <= nowMs && eMs >= nowMs,
       upcoming: sMs > nowMs,
-      ended:    eMs > 0 && eMs < nowMs,
+      ended: eMs > 0 && eMs < nowMs,
     };
-  }).filter(n => n.bmu && assetMeta[n.bmu]); // only keep our monitored assets
+  }).filter(function(n) { return n.bmu && assetMeta[n.bmu]; });
 
-  // Sort: active → upcoming (by start asc) → ended (by end desc)
-  notices.sort((a, b) => {
-    if (a.active   && !b.active)   return -1;
-    if (!a.active  && b.active)    return 1;
+  notices.sort(function(a, b) {
+    if (a.active && !b.active) return -1;
+    if (!a.active && b.active) return 1;
     if (a.upcoming && !b.upcoming) return -1;
     if (!a.upcoming && b.upcoming) return 1;
     if (a.upcoming && b.upcoming) return new Date(a.start) - new Date(b.start);
@@ -295,15 +297,14 @@ async function fetchREMIT(now) {
   });
 
   return {
-    total_found:     notices.length,
-    notices:         notices.slice(0, 50),
+    total_found: notices.length,
+    notices: notices.slice(0, 50),
     monitored_count: ASSETS.length,
-    diagnostics: {
-      step1: step1Stats,
-      step2: step2Stats,
-      unique_ids: msgIds.size,
+    debug: {
+      step1: step1,
+      step2: step2,
+      unique_ids: idList.length,
       raw_details: allDetails.length,
-      after_filter: notices.length,
     },
   };
 }
