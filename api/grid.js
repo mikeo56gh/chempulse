@@ -163,13 +163,11 @@ async function fetchWindSolarForecast(today, tomorrow) {
 }
 
 // ── REMIT ─────────────────────────────────────────────────────────────────────
-// Uses datasets/REMIT with from/to/bmUnit — same pattern as ccgt.js which works
 
 async function fetchREMIT(now) {
   const from30d = new Date(now - 30 * 86400000).toISOString().split("T")[0];
   const to30d   = new Date(now + 30 * 86400000).toISOString().split("T")[0];
 
-  // Use prefix queries (T_SCCL not T_SCCL-1) — matches all units, same as ccgt.js
   const PREFIXES = [
     { bmu: "T_SCCL",  name: "Saltend (Triton Power)", site: "Saltend Chemicals Park" },
     { bmu: "T_KILNO", name: "Killingholme A",          site: "South Humber Bank" },
@@ -179,31 +177,45 @@ async function fetchREMIT(now) {
     { bmu: "T_TEAB",  name: "Teesside Power",           site: "Teesside" },
   ];
 
-  // Individual asset lookup for display names
-  const ASSETS = [
-    { bmu: "T_SCCL-1",  name: "Saltend Unit 1",    site: "Saltend Chemicals Park" },
-    { bmu: "T_SCCL-2",  name: "Saltend Unit 2",    site: "Saltend Chemicals Park" },
-    { bmu: "T_SCCL-3",  name: "Saltend Unit 3",    site: "Saltend Chemicals Park" },
-    { bmu: "T_KILNO-1", name: "Killingholme A",     site: "South Humber Bank" },
-    { bmu: "T_KILNS-1", name: "Killingholme B",     site: "South Humber Bank" },
-    { bmu: "T_KEAD-1",  name: "Keadby 1",          site: "Scunthorpe / Humber" },
-    { bmu: "T_KEAD-2",  name: "Keadby 2",          site: "Scunthorpe / Humber" },
-    { bmu: "T_SOHU-1",  name: "South Humber Bank",  site: "South Humber Bank" },
-    { bmu: "T_TEAB-1",  name: "Teesside Power",     site: "Teesside" },
-  ];
-  const metaMap = Object.fromEntries(ASSETS.map(a => [a.bmu, a]));
-  // Prefix fallback
-  PREFIXES.forEach(p => { metaMap[p.bmu] = p; });
-
+  // Full instrumentation — log EVERY step so we can see what's actually happening
+  const diagnostics = [];
   const allItems = [];
+
   await Promise.allSettled(PREFIXES.map(async pfx => {
+    const url = `${BASE}/datasets/REMIT?from=${from30d}&to=${to30d}&bmUnit=${pfx.bmu}`;
+    const diag = { bmu: pfx.bmu, url, status: null, count: 0, error: null, sample: null };
     try {
-      const url = `${BASE}/datasets/REMIT?from=${from30d}&to=${to30d}&bmUnit=${pfx.bmu}`;
       const r = await ft(url, 8000);
-      if (!r.ok) return;
-      const d = await r.json();
-      (d.data || d.items || []).forEach(i => allItems.push({ ...i, _meta: pfx }));
-    } catch(e) {}
+      diag.status = r.status;
+      if (!r.ok) {
+        diag.error = `HTTP ${r.status}`;
+        diagnostics.push(diag);
+        return;
+      }
+      const text = await r.text();
+      diag.response_length = text.length;
+      try {
+        const d = JSON.parse(text);
+        const items = d.data || d.items || [];
+        diag.count = items.length;
+        if (items.length > 0) {
+          // Capture first item's ALL field names so we see what the API actually returns
+          diag.sample = {
+            keys: Object.keys(items[0]),
+            first_item: items[0],
+          };
+        } else {
+          diag.sample = { empty_body_keys: Object.keys(d) };
+        }
+        items.forEach(i => allItems.push({ ...i, _meta: pfx }));
+      } catch (parseErr) {
+        diag.error = `JSON parse: ${parseErr.message}`;
+        diag.sample = { raw_preview: text.slice(0, 200) };
+      }
+    } catch (fetchErr) {
+      diag.error = `Fetch: ${fetchErr.message}`;
+    }
+    diagnostics.push(diag);
   }));
 
   const nowMs = now.getTime();
@@ -241,12 +253,10 @@ async function fetchREMIT(now) {
   return {
     total_found:      notices.length,
     notices:          notices.slice(0, 40),
-    monitored_count:  ASSETS.length,
-    debug: {
-      total_raw:      allItems.length,
-      from:           from30d,
-      to:             to30d,
-      assets_queried: ASSETS.map(a => a.bmu),
-    },
+    monitored_count:  PREFIXES.length,
+    // FULL diagnostic info exposed in API response — open DevTools Network tab to see this
+    diagnostics,
+    from: from30d,
+    to: to30d,
   };
 }
