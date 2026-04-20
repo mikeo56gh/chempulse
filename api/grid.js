@@ -165,89 +165,79 @@ async function fetchWindSolarForecast(today, tomorrow) {
 // ── REMIT ─────────────────────────────────────────────────────────────────────
 
 async function fetchREMIT(now) {
-  // Step 1: get message list via remit/list/by-publish
-  // Step 2: fetch full details for each relevant message
-  const from30d = new Date(now - 30  * 86400000).toISOString();
-  const to90d   = new Date(now + 90  * 86400000).toISOString();
+  const from30d = new Date(now - 30 * 86400000).toISOString();
+  const to90d   = new Date(now + 90 * 86400000).toISOString();
 
-  const BMU_META = {
-    'T_SCCL-1':  { name: 'Saltend Unit 1 (Triton)',  site: 'Saltend Chemicals Park' },
-    'T_SCCL-2':  { name: 'Saltend Unit 2 (Triton)',  site: 'Saltend Chemicals Park' },
-    'T_SCCL-3':  { name: 'Saltend Unit 3 (Triton)',  site: 'Saltend Chemicals Park' },
-    'T_KILNO-1': { name: 'Killingholme A',            site: 'South Humber Bank' },
-    'T_KILNS-1': { name: 'Killingholme B',            site: 'South Humber Bank' },
-    'T_KEAD-1':  { name: 'Keadby 1',                 site: 'Scunthorpe / Humber' },
-    'T_KEAD-2':  { name: 'Keadby 2',                 site: 'Scunthorpe / Humber' },
-    'T_SOHU-1':  { name: 'South Humber Bank',         site: 'South Humber Bank' },
-    'T_TEAB-1':  { name: 'Teesside Power',            site: 'Teesside' },
-  };
-  const BMU_PREFIXES = ['T_SCCL', 'T_KILNO', 'T_KILNS', 'T_KEAD', 'T_SOHU', 'T_TEAB'];
+  const ASSETS = [
+    { id: 'T_SCCL-1',  name: 'Saltend Unit 1',   site: 'Saltend Chemicals Park' },
+    { id: 'T_SCCL-2',  name: 'Saltend Unit 2',   site: 'Saltend Chemicals Park' },
+    { id: 'T_SCCL-3',  name: 'Saltend Unit 3',   site: 'Saltend Chemicals Park' },
+    { id: 'T_KILNO-1', name: 'Killingholme A',    site: 'South Humber Bank' },
+    { id: 'T_KILNS-1', name: 'Killingholme B',    site: 'South Humber Bank' },
+    { id: 'T_KEAD-1',  name: 'Keadby 1',         site: 'Scunthorpe / Humber' },
+    { id: 'T_KEAD-2',  name: 'Keadby 2',         site: 'Scunthorpe / Humber' },
+    { id: 'T_SOHU-1',  name: 'South Humber Bank', site: 'South Humber Bank' },
+    { id: 'T_TEAB-1',  name: 'Teesside Power',    site: 'Teesside' },
+  ];
+  const assetMeta = Object.fromEntries(ASSETS.map(a => [a.id, a]));
 
-  // Fetch message list for each BMU prefix in parallel
-  const listUrl = (prefix) =>
-    `${BASE}/remit/list/by-publish?from=${from30d}&to=${to90d}&assetId=${prefix}&latestRevisionOnly=true&profileOnly=false`;
-
-  const allIds = new Map(); // id -> { url, prefix }
-  await Promise.allSettled(BMU_PREFIXES.map(async prefix => {
+  // Step 1: list/by-publish for each asset in parallel
+  const msgIds = new Set();
+  await Promise.allSettled(ASSETS.map(async asset => {
     try {
-      const r = await ft(listUrl(prefix), 8000);
+      const url = `${BASE}/remit/list/by-publish?from=${encodeURIComponent(from30d)}&to=${encodeURIComponent(to90d)}&assetId=${asset.id}&latestRevisionOnly=true&format=json`;
+      const r = await ft(url, 8000);
       if (!r.ok) return;
       const d = await r.json();
-      (d.data || []).forEach(msg => {
-        if (msg.id && !allIds.has(msg.id)) {
-          allIds.set(msg.id, msg.url || `${BASE}/remit/${msg.id}`);
-        }
-      });
+      (d.data || []).forEach(m => { if (m.id) msgIds.add(m.id); });
     } catch(e) {}
   }));
 
-  if (!allIds.size) {
-    return { total_found: 0, notices: [], monitored_count: BMU_PREFIXES.length };
-  }
+  if (!msgIds.size) return { total_found: 0, notices: [], monitored_count: ASSETS.length };
 
-  // Step 2: fetch full details for each message in batches
-  const ids = [...allIds.entries()].slice(0, 50); // cap at 50
-  const details = [];
-  const BATCH = 8;
-  for (let i = 0; i < ids.length; i += BATCH) {
-    const batch = ids.slice(i, i + BATCH);
-    const settled = await Promise.allSettled(batch.map(async ([id, url]) => {
-      const r = await ft(url || `${BASE}/remit/${id}`, 7000);
-      if (!r.ok) return null;
+  // Step 2: bulk fetch message details — /remit?messageId=1&messageId=2...
+  // Batch into groups of 20 to avoid URL length limits
+  const idArr = [...msgIds];
+  const allDetails = [];
+  const BATCH = 20;
+  for (let i = 0; i < idArr.length; i += BATCH) {
+    const batch = idArr.slice(i, i + BATCH);
+    const qs = batch.map(id => `messageId=${id}`).join('&');
+    try {
+      const r = await ft(`${BASE}/remit?${qs}&format=json`, 10000);
+      if (!r.ok) continue;
       const d = await r.json();
-      return d.data || d;
-    }));
-    settled.forEach(s => { if (s.status === 'fulfilled' && s.value) details.push(s.value); });
+      allDetails.push(...(d.data || []));
+    } catch(e) {}
   }
 
-  // Normalise each message
+  // Normalise using exact field names from the API schema
   const nowMs = now.getTime();
-  const notices = details.map(msg => {
-    // Handle both array-wrapped and direct object responses
-    const m = Array.isArray(msg) ? msg[0] : msg;
-    if (!m) return null;
-    const bmu    = m.bmUnit || m.assetId || m.registeredResourceMRID || '';
-    const meta   = BMU_META[bmu] || BMU_META[bmu.replace(/-\d+$/, '-1')] || { name: bmu, site: 'Humber / Teesside' };
-    const start  = m.eventStart  || m.startTime  || m.effectiveFrom || '';
-    const end    = m.eventEnd    || m.endTime    || m.effectiveTo   || '';
+  const notices = allDetails.map(m => {
+    const bmu    = m.assetId || m.affectedUnit || '';
+    const meta   = assetMeta[bmu] || { name: bmu, site: 'Humber / Teesside' };
+    const start  = m.eventStartTime || m.eventStart || '';
+    const end    = m.eventEndTime   || m.eventEnd   || '';
     const sMs    = start ? new Date(start).getTime() : 0;
     const eMs    = end   ? new Date(end).getTime()   : 0;
     return {
       bmu,
       plant_name:     meta.name,
       chemical_site:  meta.site,
-      type:           m.outageType || m.messageType || m.unavailabilityType || '',
-      reason:         m.reasonForUnavailability || m.cause || m.messageHeadline || m.eventType || '',
-      unavailable_mw: m.unavailableCapacity ?? m.unavailableCapacityMW ?? m.affectedCapacity ?? null,
-      normal_mw:      m.normalCapacity ?? m.installedCapacity ?? null,
+      type:           m.unavailabilityType || m.messageType || '',
+      reason:         m.cause || m.messageHeading || m.relatedInformation || '',
+      unavailable_mw: m.unavailableCapacity ?? null,
+      normal_mw:      m.normalCapacity ?? null,
+      available_mw:   m.availableCapacity ?? null,
+      event_status:   m.eventStatus || '',
       start, end,
       active:   sMs > 0 && eMs > 0 && sMs <= nowMs && eMs >= nowMs,
       upcoming: sMs > nowMs,
       ended:    eMs > 0 && eMs < nowMs,
     };
-  }).filter(Boolean);
+  }).filter(m => m.bmu);
 
-  // Sort: active → upcoming → ended
+  // Sort: active → upcoming (by start) → ended (by end desc)
   notices.sort((a, b) => {
     if (a.active   && !b.active)   return -1;
     if (!a.active  && b.active)    return 1;
@@ -256,5 +246,5 @@ async function fetchREMIT(now) {
     return new Date(b.start) - new Date(a.start);
   });
 
-  return { total_found: notices.length, notices: notices.slice(0, 30), monitored_count: BMU_PREFIXES.length };
+  return { total_found: notices.length, notices: notices.slice(0, 40), monitored_count: ASSETS.length };
 }
