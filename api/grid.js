@@ -2,6 +2,8 @@
 // Elexon BMRS: fuel mix, wind/solar forecast, REMIT outages
 // All free, no API key required
 
+export const config = { maxDuration: 60 };  // REMIT does ~225 sequential API calls
+
 const BASE = 'https://data.elexon.co.uk/bmrs/api/v1';
 
 const HUMBER_BMUS = [
@@ -163,100 +165,145 @@ async function fetchWindSolarForecast(today, tomorrow) {
 }
 
 // ── REMIT ─────────────────────────────────────────────────────────────────────
+// Two-step flow with 7-day windows (Elexon enforces 7-day max per request)
+// Step 1: /remit/list/by-publish?assetId=X&from=Y&to=Z → message IDs
+// Step 2: /remit?messageId=A&messageId=B&... → full message details
 
 async function fetchREMIT(now) {
-  const from30d = new Date(now - 30 * 86400000).toISOString().split("T")[0];
-  const to30d   = new Date(now + 30 * 86400000).toISOString().split("T")[0];
+  const WEEKS_BACK    = 12;  // 3 months of history
+  const WEEKS_FORWARD = 13;  // ~3 months ahead (upcoming planned outages)
 
-  const PREFIXES = [
-    { bmu: "T_SCCL",  name: "Saltend (Triton Power)", site: "Saltend Chemicals Park" },
-    { bmu: "T_KILNO", name: "Killingholme A",          site: "South Humber Bank" },
-    { bmu: "T_KILNS", name: "Killingholme B",          site: "South Humber Bank" },
-    { bmu: "T_KEAD",  name: "Keadby",                  site: "Scunthorpe / Humber" },
-    { bmu: "T_SOHU",  name: "South Humber Bank",        site: "South Humber Bank" },
-    { bmu: "T_TEAB",  name: "Teesside Power",           site: "Teesside" },
+  // All 9 assets queried individually — API requires exact assetId, not prefix
+  const ASSETS = [
+    { id: "T_SCCL-1",  name: "Saltend Unit 1",    site: "Saltend Chemicals Park" },
+    { id: "T_SCCL-2",  name: "Saltend Unit 2",    site: "Saltend Chemicals Park" },
+    { id: "T_SCCL-3",  name: "Saltend Unit 3",    site: "Saltend Chemicals Park" },
+    { id: "T_KILNO-1", name: "Killingholme A",     site: "South Humber Bank" },
+    { id: "T_KILNS-1", name: "Killingholme B",     site: "South Humber Bank" },
+    { id: "T_KEAD-1",  name: "Keadby 1",          site: "Scunthorpe / Humber" },
+    { id: "T_KEAD-2",  name: "Keadby 2",          site: "Scunthorpe / Humber" },
+    { id: "T_SOHU-1",  name: "South Humber Bank",  site: "South Humber Bank" },
+    { id: "T_TEAB-1",  name: "Teesside Power",     site: "Teesside" },
   ];
+  const assetMeta = Object.fromEntries(ASSETS.map(a => [a.id, a]));
 
-  // Full instrumentation — log EVERY step so we can see what's actually happening
-  const diagnostics = [];
-  const allItems = [];
+  // Build weekly windows — API enforces 7-day max per request
+  const windows = [];
+  for (let w = -WEEKS_BACK; w < WEEKS_FORWARD; w++) {
+    const from = new Date(now.getTime() + w * 7 * 86400000).toISOString().replace(/\.\d{3}Z$/, 'Z');
+    const to   = new Date(now.getTime() + (w + 1) * 7 * 86400000).toISOString().replace(/\.\d{3}Z$/, 'Z');
+    windows.push({ from, to });
+  }
 
-  await Promise.allSettled(PREFIXES.map(async pfx => {
-    const url = `${BASE}/datasets/REMIT?from=${from30d}&to=${to30d}&bmUnit=${pfx.bmu}`;
-    const diag = { bmu: pfx.bmu, url, status: null, count: 0, error: null, sample: null };
-    try {
-      const r = await ft(url, 8000);
-      diag.status = r.status;
-      if (!r.ok) {
-        diag.error = `HTTP ${r.status}`;
-        diagnostics.push(diag);
-        return;
-      }
-      const text = await r.text();
-      diag.response_length = text.length;
-      try {
-        const d = JSON.parse(text);
-        const items = d.data || d.items || [];
-        diag.count = items.length;
-        if (items.length > 0) {
-          // Capture first item's ALL field names so we see what the API actually returns
-          diag.sample = {
-            keys: Object.keys(items[0]),
-            first_item: items[0],
-          };
-        } else {
-          diag.sample = { empty_body_keys: Object.keys(d) };
-        }
-        items.forEach(i => allItems.push({ ...i, _meta: pfx }));
-      } catch (parseErr) {
-        diag.error = `JSON parse: ${parseErr.message}`;
-        diag.sample = { raw_preview: text.slice(0, 200) };
-      }
-    } catch (fetchErr) {
-      diag.error = `Fetch: ${fetchErr.message}`;
+  // Step 1: Collect message IDs in parallel
+  // 9 assets × ~25 windows = 225 requests — run in chunks to avoid overwhelming the API
+  const msgIds = new Set();
+  const step1Stats = { requests: 0, ok: 0, errors: 0 };
+
+  // Flatten asset×window pairs, then process in chunks of 20 concurrent
+  const pairs = [];
+  for (const asset of ASSETS) {
+    for (const win of windows) {
+      pairs.push({ asset, win });
     }
-    diagnostics.push(diag);
-  }));
+  }
 
+  const CHUNK = 20;
+  for (let i = 0; i < pairs.length; i += CHUNK) {
+    const batch = pairs.slice(i, i + CHUNK);
+    await Promise.allSettled(batch.map(async ({ asset, win }) => {
+      step1Stats.requests++;
+      try {
+        const url = `${BASE}/remit/list/by-publish?from=${win.from}&to=${win.to}&assetId=${asset.id}&latestRevisionOnly=true&format=json`;
+        const r = await ft(url, 7000);
+        if (!r.ok) { step1Stats.errors++; return; }
+        const d = await r.json();
+        step1Stats.ok++;
+        (d.data || []).forEach(m => { if (m.id) msgIds.add(m.id); });
+      } catch(e) {
+        step1Stats.errors++;
+      }
+    }));
+  }
+
+  if (!msgIds.size) {
+    return {
+      total_found: 0,
+      notices: [],
+      monitored_count: ASSETS.length,
+      diagnostics: { step1: step1Stats, windows_tried: windows.length, assets_tried: ASSETS.length, note: 'No message IDs found across all windows' },
+    };
+  }
+
+  // Step 2: Bulk fetch details in chunks of 50 IDs per request
+  const idArr = [...msgIds];
+  const allDetails = [];
+  const BULK = 50;
+  const step2Stats = { requests: 0, ok: 0, items: 0 };
+
+  for (let i = 0; i < idArr.length; i += BULK) {
+    const batch = idArr.slice(i, i + BULK);
+    step2Stats.requests++;
+    try {
+      const qs = batch.map(id => `messageId=${id}`).join('&');
+      const r = await ft(`${BASE}/remit?${qs}&format=json`, 15000);
+      if (!r.ok) continue;
+      const d = await r.json();
+      step2Stats.ok++;
+      (d.data || []).forEach(m => allDetails.push(m));
+      step2Stats.items += (d.data || []).length;
+    } catch(e) {}
+  }
+
+  // Normalise using exact field names from API schema
   const nowMs = now.getTime();
-  const notices = allItems.map(i => {
-    const meta  = i._meta;
-    const start = i.eventStartTime || i.eventStart || i.effectiveFrom || "";
-    const end   = i.eventEndTime   || i.eventEnd   || i.effectiveTo   || "";
+  const notices = allDetails.map(m => {
+    const bmu   = m.assetId || m.affectedUnit || '';
+    const meta  = assetMeta[bmu] || { name: bmu, site: 'Humber / Teesside' };
+    const start = m.eventStartTime || '';
+    const end   = m.eventEndTime   || '';
     const sMs   = start ? new Date(start).getTime() : 0;
     const eMs   = end   ? new Date(end).getTime()   : 0;
     return {
-      bmu:            i.bmUnit || i.assetId || meta.bmu,
+      bmu,
       plant_name:     meta.name,
       chemical_site:  meta.site,
-      type:           i.unavailabilityType || i.outageType || i.messageType || "",
-      reason:         i.cause || i.reasonForUnavailability || i.messageHeading || "",
-      unavailable_mw: i.unavailableCapacity ?? i.unavailableCapacityMW ?? null,
-      normal_mw:      i.normalCapacity ?? null,
-      available_mw:   i.availableCapacity ?? null,
-      event_status:   i.eventStatus || "",
+      type:           m.unavailabilityType || m.messageType || '',
+      reason:         m.cause || m.messageHeading || m.relatedInformation || '',
+      event_type:     m.eventType || '',
+      fuel_type:      m.fuelType || '',
+      unavailable_mw: m.unavailableCapacity ?? null,
+      normal_mw:      m.normalCapacity ?? null,
+      available_mw:   m.availableCapacity ?? null,
+      event_status:   m.eventStatus || '',
+      publish_time:   m.publishTime || m.createdTime || '',
       start, end,
       active:   sMs > 0 && eMs > 0 && sMs <= nowMs && eMs >= nowMs,
       upcoming: sMs > nowMs,
       ended:    eMs > 0 && eMs < nowMs,
     };
-  }).filter(n => n.bmu);
+  }).filter(n => n.bmu && assetMeta[n.bmu]); // only keep our monitored assets
 
+  // Sort: active → upcoming (by start asc) → ended (by end desc)
   notices.sort((a, b) => {
     if (a.active   && !b.active)   return -1;
     if (!a.active  && b.active)    return 1;
     if (a.upcoming && !b.upcoming) return -1;
     if (!a.upcoming && b.upcoming) return 1;
+    if (a.upcoming && b.upcoming) return new Date(a.start) - new Date(b.start);
     return new Date(b.start) - new Date(a.start);
   });
 
   return {
-    total_found:      notices.length,
-    notices:          notices.slice(0, 40),
-    monitored_count:  PREFIXES.length,
-    // FULL diagnostic info exposed in API response — open DevTools Network tab to see this
-    diagnostics,
-    from: from30d,
-    to: to30d,
+    total_found:     notices.length,
+    notices:         notices.slice(0, 50),
+    monitored_count: ASSETS.length,
+    diagnostics: {
+      step1: step1Stats,
+      step2: step2Stats,
+      unique_ids: msgIds.size,
+      raw_details: allDetails.length,
+      after_filter: notices.length,
+    },
   };
 }
