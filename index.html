@@ -2235,8 +2235,12 @@ function renderREMIT(d,el){
   }
   const rm=d.remit;
   if(!rm.notices?.length){
-    el.innerHTML=`<div class="card"><div style="font-size:.75rem;color:var(--green);padding:.25rem 0">✓ No REMIT notices found for monitored plants.</div>
-      <div style="font-size:.65rem;color:var(--dim);margin-top:.3rem">Monitoring: Saltend, Killingholme, Keadby, South Humber Bank, Teesside · <a href="https://bmrs.elexon.co.uk/remit" target="_blank" style="color:var(--teal)">View all REMIT →</a></div></div>`;
+    const dbg = rm.debug ? `<br><span style="font-family:monospace;font-size:.6rem">IDs found: ${rm.debug.msg_ids_found} · Details fetched: ${rm.debug.details_fetched}</span>` : '';
+    el.innerHTML=`<div class="card">
+      <div style="font-size:.75rem;color:var(--amber);padding:.25rem 0">No REMIT notices returned for monitored assets.${dbg}</div>
+      <div style="font-size:.65rem;color:var(--dim);margin-top:.5rem">Assets queried: ${(rm.debug?.assets_queried||[]).join(', ')}</div>
+      <div style="font-size:.65rem;margin-top:.3rem"><a href="https://bmrs.elexon.co.uk/remit" target="_blank" style="color:var(--teal)">Check BMRS REMIT directly →</a></div>
+    </div>`;
     return;
   }
 
