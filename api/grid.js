@@ -246,5 +246,14 @@ async function fetchREMIT(now) {
     return new Date(b.start) - new Date(a.start);
   });
 
-  return { total_found: notices.length, notices: notices.slice(0, 40), monitored_count: ASSETS.length };
+  return { 
+    total_found: notices.length, 
+    notices: notices.slice(0, 40), 
+    monitored_count: ASSETS.length,
+    debug: {
+      msg_ids_found: idArr.length,
+      details_fetched: allDetails.length,
+      assets_queried: ASSETS.map(a => a.id),
+    }
+  };
 }
