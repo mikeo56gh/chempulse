@@ -245,7 +245,7 @@ async function fetchREMIT(now) {
     debug: {
       total_raw:      allItems.length,
       from:           from30d,
-      to:             to90d,
+      to:             to30d,
       assets_queried: ASSETS.map(a => a.bmu),
     },
   };
