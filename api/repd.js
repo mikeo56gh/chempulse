@@ -5,8 +5,34 @@
 
 export const config = { maxDuration: 60 };
 
-const REPD_CSV_URL =
-  'https://assets.publishing.service.gov.uk/media/6985c316d3f57710b50a9b1f/REPD_Publication_Q4_2025.csv';
+const REPD_PAGE = 'https://www.gov.uk/government/publications/renewable-energy-planning-database-monthly-extract';
+
+// Fallback list of known recent URLs in case page scraping fails
+const FALLBACK_URLS = [
+  'https://assets.publishing.service.gov.uk/media/6985c316d3f57710b50a9b1f/REPD_Publication_Q4_2025.csv',
+  'https://assets.publishing.service.gov.uk/media/68a3f3a1d44d6c25fc5e1e0e/REPD_Publication_Q3_2025.csv',
+  'https://assets.publishing.service.gov.uk/media/68402c2c1de9ee9af5dccffd/REPD_Publication_Q2_2025.csv',
+];
+
+// Scrape the gov.uk page to find the current REPD CSV URL
+async function findCurrentCsvUrl() {
+  try {
+    const ctrl = new AbortController();
+    const tid = setTimeout(() => ctrl.abort(), 8000);
+    const r = await fetch(REPD_PAGE, {
+      signal: ctrl.signal,
+      headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'text/html' }
+    });
+    clearTimeout(tid);
+    if (!r.ok) return null;
+    const html = await r.text();
+    // Match the first publishing.service.gov.uk REPD_Publication CSV URL
+    const m = html.match(/https:\/\/assets\.publishing\.service\.gov\.uk\/media\/[a-f0-9]+\/REPD_Publication_[^"<\s]+\.csv/i);
+    return m ? m[0] : null;
+  } catch (e) {
+    return null;
+  }
+}
 
 // Simplified BNG → WGS84 conversion (Ordnance Survey approximate algorithm)
 // Accurate to ~5m which is plenty for renewable project mapping
@@ -111,17 +137,38 @@ export default async function handler(req, res) {
   res.setHeader('Cache-Control', 's-maxage=43200');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  try {
-    const controller = new AbortController();
-    const tid = setTimeout(() => controller.abort(), 30000);
-    const r = await fetch(REPD_CSV_URL, {
-      signal: controller.signal,
-      headers: { 'Accept': 'text/csv,text/plain,*/*' }
-    });
-    clearTimeout(tid);
-    if (!r.ok) throw new Error('GOV.UK CSV fetch failed: ' + r.status);
+  let usedUrl = null;
+  let text = null;
 
-    const text = await r.text();
+  try {
+    // Step 1: Try discovering the current URL dynamically from the gov.uk page
+    const discovered = await findCurrentCsvUrl();
+    const candidates = discovered
+      ? [discovered, ...FALLBACK_URLS.filter(u => u !== discovered)]
+      : FALLBACK_URLS.slice();
+
+    // Step 2: Try each URL in sequence until one works
+    let lastStatus = null;
+    for (const url of candidates) {
+      try {
+        const controller = new AbortController();
+        const tid = setTimeout(() => controller.abort(), 25000);
+        const r = await fetch(url, {
+          signal: controller.signal,
+          headers: { 'Accept': 'text/csv,text/plain,*/*', 'User-Agent': 'Mozilla/5.0' }
+        });
+        clearTimeout(tid);
+        lastStatus = r.status;
+        if (!r.ok) continue;
+        text = await r.text();
+        usedUrl = url;
+        break;
+      } catch (e) {
+        continue;
+      }
+    }
+
+    if (!text) throw new Error('All REPD CSV URLs failed (last status: ' + lastStatus + ')');
     const rows = parseCSV(text);
     if (rows.length < 2) throw new Error('CSV parse returned no rows');
 
@@ -220,7 +267,7 @@ export default async function handler(req, res) {
         total:    features.length,
         skipped:  skipped,
         source:   'DESNZ / Barbour ABI — Open Government Licence',
-        csv_url:  REPD_CSV_URL,
+        csv_url:  usedUrl,
         asOf:     new Date().toISOString(),
         tech_counts:   techCounts,
         status_counts: statusCounts,
@@ -231,7 +278,6 @@ export default async function handler(req, res) {
     res.status(500).json({
       error: String(e && e.message ? e.message : e),
       stage: 'repd handler',
-      csv_url: REPD_CSV_URL,
     });
   }
 }
